@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import sys
 import random
+import os
+from tqdm import tqdm
+import h5py
 
 class Debugger(object):
     """
@@ -13,8 +16,8 @@ class Debugger(object):
 
 
 
-    def __init__(self):
-        #self.dataset = dataset
+    def __init__(self, settings):
+        self.settings = settings
         a = 0
 
 
@@ -47,6 +50,29 @@ class Debugger(object):
         return values_dict
 
     # maybe also show avg value for labels? - to compare label<->predicted
+    def viewVectors(self, images, labels=[], how_many=6, off=0):
+
+        rows, columns = 2, 3
+        #fig = plt.figure(figsize=(10, 8))
+        fig = plt.figure()
+        k = 1
+        for idx in range(how_many):
+
+            label = images[idx+off]
+            fig.add_subplot(rows, columns, k)
+            plt.imshow(label, cmap='gray')
+
+            text = ""
+            if len(labels)>0:
+                text += str(round(labels[idx+off], 2))+"%"
+            #text += "Label shape "+str(label.shape)+"\n"+self.dynamicRangeInImage(label)
+            #text = ""
+            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            k += 1
+
+        plt.show()
+        # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
+
 
     def viewTripples(self, lefts, rights, labels, how_many=3, off=0):
         #for i in range(len(lefts)):
@@ -213,3 +239,108 @@ class Debugger(object):
         fig.canvas.mpl_connect('key_press_event', press)
 
         plt.show()
+
+
+    # Data checking:
+
+    def check_balance_of_data(self, labels, optional_paths=''):
+        # In this we want to check how many pixels are marking "change" in each image
+
+        #labels = labels[0:500]
+
+        exploration_sum_values = {}
+        array_of_number_of_change_pixels = []
+
+        # slow part >>
+        for image in tqdm(labels):
+            values = self.occurancesInImage(image) # values we have are "1" and "0.0"
+            #print("values.keys()",values.keys())
+            for value in values:
+                #print("'",value,"'")
+                if value in exploration_sum_values:
+                    exploration_sum_values[value] += values[value]
+                else:
+                    exploration_sum_values[value] = values[value]
+            if 1 in values.keys(): # number 1 as a key signifies changed pixel
+                array_of_number_of_change_pixels.append(values[1])
+            else:
+                array_of_number_of_change_pixels.append(0)
+
+        print("In the whole dataset, we have these values:")
+        print(exploration_sum_values)
+
+        print("We have these numbers of alive pixels:")
+        print(array_of_number_of_change_pixels)
+
+        self.save_arr(array_of_number_of_change_pixels)
+
+        # << skip it, if you can
+        array_of_number_of_change_pixels = self.load_arr()
+
+        array_of_number_of_change_pixels = array_of_number_of_change_pixels / (256*256) * 100.0 # percentage of image changed
+
+        bigger_than_percent = 10.0
+
+        idx_examples_bigger = np.argwhere(array_of_number_of_change_pixels > bigger_than_percent)
+        original_array_of_number_of_change_pixels = array_of_number_of_change_pixels
+
+        less = [val for val in array_of_number_of_change_pixels if val <= bigger_than_percent]
+        array_of_number_of_change_pixels = [val for val in array_of_number_of_change_pixels if val > bigger_than_percent] # no zeros
+        print("The data which is >",bigger_than_percent,"% changed is ", len(array_of_number_of_change_pixels), "versus the remainder of", len(less))
+
+        # the histogram of the data
+        #fig = plt.figure(figsize=(10, 8))
+        fig = plt.figure()
+        bins = 100
+        values_of_bins, bins, patches = plt.hist(array_of_number_of_change_pixels, bins, facecolor='g', alpha=0.75)
+
+        print("values_of_bins", np.asarray(values_of_bins).astype(int))
+        print("bins sizes", bins)
+        plt.yscale('log', nonposy='clip')
+
+        plt.title('How much change in the 256x256 tiles?')
+        plt.xlabel('Percentage of pixels belonging to change')
+        plt.ylabel('Log scale of number of images/256x256 tiles')
+
+        plt.show()
+
+        if optional_paths is not '':
+            labels_to_show = []
+            txt_labels = []
+            for i in range(100):
+                idx = idx_examples_bigger[i][0]
+                label_image = optional_paths[idx]
+                labels_to_show.append(label_image)
+                txt_labels.append(original_array_of_number_of_change_pixels[idx])
+
+            import DataLoader
+            images = [DataLoader.DataLoader.load_vector_image(0, path) for path in labels_to_show]
+
+            self.viewVectors(images, txt_labels, how_many=6, off=0)
+            self.viewVectors(images, txt_labels, how_many=6, off=6)
+            self.viewVectors(images, txt_labels, how_many=6, off=12)
+
+    # File helpers
+
+    def mkdir(self, directory):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+    def save_arr(self, arr):
+
+        self.mkdir(self.settings.large_file_folder+"debuggerstuffs")
+        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr.h5"
+
+        hdf5_file = h5py.File(hdf5_path, mode='w')
+        hdf5_file.create_dataset("arr", data=arr, dtype="float32")
+        hdf5_file.close()
+
+        print("Saved arr to:", hdf5_path)
+
+    def load_arr(self):
+        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr.h5"
+
+        hdf5_file = h5py.File(hdf5_path, "r")
+        arr = hdf5_file['arr'][:]
+        hdf5_file.close()
+        return arr

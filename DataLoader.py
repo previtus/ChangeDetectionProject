@@ -19,7 +19,7 @@ class DataLoader(object):
 
     def __init__(self, settings):
         self.settings = settings
-        self.debugger = Debugger.Debugger()
+        self.debugger = Debugger.Debugger(settings)
 
         self.local_setting_skip_rows = 2
         self.local_setting_skip_columns = 2
@@ -28,7 +28,7 @@ class DataLoader(object):
 
 
     def load_dataset(self):
-        load_paths_from_folders = True # TRUE To recompute the paths from folder
+        load_paths_from_folders = False # TRUE To recompute the paths from folder
         load_images_anew = False # TRUE To reload images from the files directly
         
         hdf5_path = self.settings.large_file_folder+"datasets/preloadedImgs_sub5000_res256x256.h5"
@@ -48,28 +48,32 @@ class DataLoader(object):
         print("We have",len(all_2012_png_paths), "2012 images, ", all_2012_png_paths[0:4])
         print("We have",len(all_2015_png_paths), "2015 images, ", all_2015_png_paths[0:4])
         print("We have",len(all_vector_paths), "vector images, ", all_vector_paths[0:4])
-        """
+
         # Load images
         SUBSETa = 0
         SUBSETb = 1000
         all_2012_png_paths = all_2012_png_paths[SUBSETa:SUBSETb]
         all_2015_png_paths = all_2015_png_paths[SUBSETa:SUBSETb]
         all_vector_paths = all_vector_paths[SUBSETa:SUBSETb]
-        """
+
 
         if load_images_anew:
             # Load data
             lefts = []
             for path in tqdm( all_2012_png_paths ):
                 lefts.append(self.load_raster_image(path))
+                #lefts.append([[0]]) # hax
             rights = []
             for path in tqdm( all_2015_png_paths ):
                 rights.append(self.load_raster_image(path))
+                #rights.append([[0]]) # hax
             labels = []
             for path in tqdm( all_vector_paths ):
                 labels.append(self.load_vector_image(path))
+                #labels.append([[0]]) # hax
 
             lefts, rights, labels = self.check_shapes(lefts, rights, labels)
+            # self.debugger.check_balance_of_data(labels, all_vector_paths) ## CHECKING HOW MUCH CHANGE OCCURED, SLOW
 
             labels = np.asarray(labels).astype('float32')
             rights = np.asarray(rights).astype('float32')
@@ -127,19 +131,23 @@ class DataLoader(object):
             left = lefts[idx]
             right = rights[idx]
             label = labels[idx]
-            if (left.shape[0] != self.settings.default_raster_shape[0] or left.shape[1] != self.settings.default_raster_shape[1] or
-                    left.shape[2] != self.settings.default_raster_shape[2]):
-                shit_list.append(idx)
-            elif (right.shape[0] != self.settings.default_raster_shape[0] or right.shape[1] != self.settings.default_raster_shape[1] or
-                    right.shape[2] != self.settings.default_raster_shape[2]):
-                    shit_list.append(idx)
-            elif (label.shape[0] != self.settings.default_vector_shape[0] or label.shape[1] != self.settings.default_vector_shape[1]):
+            #< HAX
+            #if (left.shape[0] != self.settings.default_raster_shape[0] or left.shape[1] != self.settings.default_raster_shape[1] or
+            #        left.shape[2] != self.settings.default_raster_shape[2]):
+            #    shit_list.append(idx)
+            #elif (right.shape[0] != self.settings.default_raster_shape[0] or right.shape[1] != self.settings.default_raster_shape[1] or
+            #        right.shape[2] != self.settings.default_raster_shape[2]):
+            #        shit_list.append(idx)
+            if (label.shape[0] != self.settings.default_vector_shape[0] or label.shape[1] != self.settings.default_vector_shape[1]):
                 shit_list.append(idx)
         off = 0
         for i in shit_list:
             idx = i - off
-            print("deleting", idx, lefts[idx].shape, rights[idx].shape, labels[idx].shape)
-            self.debugger.viewTripples([lefts[idx]], [rights[idx]], [labels[idx]], off=0, how_many=1)
+            # < HAX
+            #print("deleting", idx, lefts[idx].shape, rights[idx].shape, labels[idx].shape)
+            print("deleting", idx, labels[idx].shape)
+            # < HAX
+            #self.debugger.viewTripples([lefts[idx]], [rights[idx]], [labels[idx]], off=0, how_many=1)
 
             del lefts[idx]
             del rights[idx]

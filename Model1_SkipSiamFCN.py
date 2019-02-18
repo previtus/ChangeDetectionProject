@@ -19,7 +19,7 @@ class Model1_SkipSiamFCN(object):
     def __init__(self, settings, dataset):
         self.settings = settings
         self.dataset = dataset
-        self.debugger = Debugger.Debugger()
+        self.debugger = Debugger.Debugger(settings)
 
         self.model = self.create_model(256)
         self.model.summary()
