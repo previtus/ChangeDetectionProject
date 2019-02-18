@@ -28,7 +28,7 @@ class DataLoader(object):
 
 
     def load_dataset(self):
-        load_paths_from_folders = False # TRUE To recompute the paths from folder
+        load_paths_from_folders = True # TRUE To recompute the paths from folder
         load_images_anew = False # TRUE To reload images from the files directly
         
         hdf5_path = self.settings.large_file_folder+"datasets/preloadedImgs_sub5000_res256x256.h5"
@@ -44,11 +44,11 @@ class DataLoader(object):
             all_2012_png_paths = self.load_paths_from_pickle(self.settings.large_file_folder+"saved_paths_2012.pickle")
             all_2015_png_paths = self.load_paths_from_pickle(self.settings.large_file_folder+"saved_paths_2015.pickle")
             all_vector_paths = self.load_paths_from_pickle(self.settings.large_file_folder+"saved_paths_vectors.pickle")
-        """
+
         print("We have",len(all_2012_png_paths), "2012 images, ", all_2012_png_paths[0:4])
         print("We have",len(all_2015_png_paths), "2015 images, ", all_2015_png_paths[0:4])
         print("We have",len(all_vector_paths), "vector images, ", all_vector_paths[0:4])
-
+        """
         # Load images
         SUBSETa = 0
         SUBSETb = 1000

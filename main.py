@@ -1,4 +1,4 @@
-import DataLoader, DataPreprocesser, Dataset, Debugger, Settings
+import DataLoader, DataPreprocesser, Dataset, Debugger, Settings, ModelHandler
 from timeit import default_timer as timer
 from datetime import *
 
@@ -15,8 +15,13 @@ def main(args):
 
     settings = Settings.Settings(args)
     dataset = Dataset.Dataset(settings)
+    #dataset.dataset
+    #model = ModelHandler.ModelHandler(settings, dataset.dataset)
 
-
+    #model.model.train()
+    #model.model.save()
+    #model.model.load()
+    #model.model.test()
 
 if __name__ == '__main__':
     args = parser.parse_args()

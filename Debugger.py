@@ -1,5 +1,10 @@
-import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
+sns.set()
+import matplotlib.pyplot as plt
+import pandas as pd
+import sys
+import random
 
 class Debugger(object):
     """
@@ -12,6 +17,9 @@ class Debugger(object):
         #self.dataset = dataset
         a = 0
 
+
+    ### DATASET VISUALIZATIONS:
+
     #def dynamicRangeInSet(self, set_of_images):
     #    return 0
 
@@ -19,8 +27,10 @@ class Debugger(object):
         ranges = ""
         if len(image.shape) > 2:
             for channel in range(image.shape[2]):
-                min_val = np.min(image[:,:,channel])
-                max_val = np.max(image[:,:,channel])
+                min_val = np.round(np.min(image[:,:,channel]), 3)
+                max_val = np.round(np.max(image[:,:,channel]), 3)
+                #min_val = np.min(image[:,:,channel])
+                #max_val = np.max(image[:,:,channel])
                 ranges += str(min_val)+"-"+str(max_val)+", "
         else:
             ranges += str(np.min(image))+"-"+str(np.max(image))
@@ -36,6 +46,7 @@ class Debugger(object):
 
         return values_dict
 
+    # maybe also show avg value for labels? - to compare label<->predicted
 
     def viewTripples(self, lefts, rights, labels, how_many=3, off=0):
         #for i in range(len(lefts)):
@@ -45,24 +56,160 @@ class Debugger(object):
         fig = plt.figure(figsize=(10, 8))
         k = 1
         for i in range(how_many):
-            left = lefts[i+off]
+            idx = i #+ random.randint(1, len(lefts)-how_many-off)
+
+            left = lefts[idx+off]
             fig.add_subplot(rows, columns, k)
-            plt.imshow(left[:,:,1:4])
+            if left.shape[2] > 3:
+                plt.imshow(left[:,:,1:4])
+            else:
+                plt.imshow(left)
             text = "Left shape "+str(left.shape)+"\n"+self.dynamicRangeInImage(left)[0:-2]
             fig.gca().set(xlabel=text, xticks=[], yticks=[])
 
-            right = rights[i+off]
+            right = rights[idx+off]
             fig.add_subplot(rows, columns, k+1)
-            plt.imshow(right[:,:,1:4])
+            if right.shape[2] > 3:
+                plt.imshow(right[:,:,1:4])
+            else:
+                plt.imshow(right)
+
             text = "Right shape "+str(right.shape)+"\n"+self.dynamicRangeInImage(right)[0:-2]
             fig.gca().set(xlabel=text, xticks=[], yticks=[])
 
-            label = labels[i+off]
+            label = labels[idx+off]
             fig.add_subplot(rows, columns, k+2)
-            plt.imshow(label, cmap='gray')
+            #plt.imshow(label, cmap='gray')
+            plt.imshow(label)#, cmap='gray')
             text = "Label shape "+str(label.shape)+"\n"+self.dynamicRangeInImage(label)
             fig.gca().set(xlabel=text, xticks=[], yticks=[])
             k += 3
 
         plt.show()
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
+
+    def viewQuadrupples(self, lefts, rights, labels, predicted, how_many=3, off=0):
+        rows, columns = how_many, 4
+        fig = plt.figure(figsize=(10, 8))
+        k = 1
+        for i in range(how_many):
+            #idx = i + random.randint(1, len(lefts)-how_many-off)
+            idx = i
+
+            left = lefts[idx+off]
+            fig.add_subplot(rows, columns, k)
+            if left.shape[2] > 3:
+                plt.imshow(left[:,:,1:4])
+            else:
+                plt.imshow(left)
+            text = "Left shape "+str(left.shape)+"\n"+self.dynamicRangeInImage(left)[0:-2]
+            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+
+            right = rights[idx+off]
+            fig.add_subplot(rows, columns, k+1)
+            if right.shape[2] > 3:
+                plt.imshow(right[:,:,1:4])
+            else:
+                plt.imshow(right)
+            text = "Right shape "+str(right.shape)+"\n"+self.dynamicRangeInImage(right)[0:-2]
+            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+
+            label = labels[idx + off]
+            fig.add_subplot(rows, columns, k+2)
+            #plt.imshow(label, cmap='gray')
+            plt.imshow(label, cmap='gray')
+            text = "Label shape "+str(label.shape)+"\n"+self.dynamicRangeInImage(label)
+            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+
+            one_predicted = predicted[idx+off]
+            fig.add_subplot(rows, columns, k+3)
+            #plt.imshow(label, cmap='gray')
+            plt.imshow(one_predicted)#, cmap='gray')
+            text = "Predicted shape "+str(one_predicted.shape)+"\n"+self.dynamicRangeInImage(one_predicted)
+            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            k += 4
+
+
+        plt.show()
+        # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
+
+    def explore_set_stats(self,arr_set):
+        amin = np.amin(arr_set.flatten())
+        amax = np.amax(arr_set.flatten())
+        print("   min", amin, "max", amax, " ... avg", np.mean(arr_set.flatten()), "+-", np.std(arr_set.flatten()),"   SetShape:",arr_set.shape)
+
+    ### TRAINING VISUALIZATIONS:
+
+    def nice_plot_history(self, history, no_val=False):
+        fig, ax = plt.subplots()
+
+        loss = history.history["loss"]
+        accuracy = history.history["accuracy"]
+        if not no_val:
+            val_loss = history.history["val_loss"]
+            val_accuracy = history.history["val_accuracy"]
+
+        data = [loss, accuracy]
+        columns = ['loss', 'accuracy']
+
+        if not no_val:
+            data = [loss, val_loss, accuracy, val_accuracy]
+            columns = ['loss', 'val_loss', 'accuracy', 'val_accuracy']
+
+        df = pd.DataFrame(data)
+        df = df.transpose()
+        df.columns = columns
+
+        print(df)
+
+        accuracies = []
+        losses = []
+
+        def plot_item(name, color, max_wanted=True):
+            line_item = sns.lineplot(y=name, x=df.index, data=df, label=name)
+            if max_wanted:
+                max_y = df[name].max()
+                max_idx = df[name].idxmax()
+            else:
+                max_y = df[name].min()
+                max_idx = df[name].idxmin()
+
+            text_item = plt.text(max_idx + 0.2, max_y + 0.05, str(round(max_y, 2)), horizontalalignment='left',
+                                 size='medium', color=color, weight='semibold')
+            return [line_item, text_item]
+
+        accuracies += plot_item("accuracy", "blue")
+        if not no_val:
+            accuracies += plot_item("val_accuracy", "orange")
+
+        losses += plot_item("loss", "green", max_wanted=False)
+        max_val = df["accuracy"].max()
+
+        if not no_val:
+            losses += plot_item("val_loss", "brown", max_wanted=False)
+            max_val = max(df["loss"].max(), df["val_loss"].max())
+
+        plt.ylim(0, 1)
+        plt.ylabel("Accuracy")
+
+        plt.legend(loc='lower right')  # best
+
+        def press(event):
+            sys.stdout.flush()
+            if event.key == '+':
+                # zoom to 0-1 accuracy
+                plt.ylim(0, 1)
+            elif event.key == '-':
+                plt.ylim(0, max_val)
+            elif event.key == 'b':
+                plt.legend(loc='best')
+            elif event.key == 'a':
+                plt.legend(loc='lower right')
+            else:
+                print('press', event.key)
+
+            fig.canvas.draw()
+
+        fig.canvas.mpl_connect('key_press_event', press)
+
+        plt.show()
