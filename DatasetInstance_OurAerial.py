@@ -361,8 +361,8 @@ class DatasetInstance_OurAerial(object):
         for path in paths:
             files = []
             for f in tqdm(listdir(path)):
-                if isfile(join(path, f)):
-                    files.append(f)
+                #if isfile(join(path, f)): # useless and slow!
+                files.append(f)
 
             #files = [f for f in listdir(path) if isfile(join(path, f))]
             self.sort_nicely(files)
@@ -475,31 +475,18 @@ class DatasetInstance_OurAerial(object):
     def check_balance_of_data(self, labels, optional_paths=''):
         # In this we want to check how many pixels are marking "change" in each image
 
-        #labels = labels[0:500]
-
         exploration_sum_values = {}
         array_of_number_of_change_pixels = []
 
-        # slow part >>
         for image in tqdm(labels):
-            values = self.debugger.occurancesInImage(image) # values we have are "1" and "0.0"
-            #print("values.keys()",values.keys())
-            for value in values:
-                #print("'",value,"'")
-                if value in exploration_sum_values:
-                    exploration_sum_values[value] += values[value]
-                else:
-                    exploration_sum_values[value] = values[value]
-            if 1 in values.keys(): # number 1 as a key signifies changed pixel
-                array_of_number_of_change_pixels.append(values[1])
-            else:
-                array_of_number_of_change_pixels.append(0)
+            number_of_ones = np.count_nonzero(image.flatten()) # << loading takes care of this 0 vs non-zero
+            array_of_number_of_change_pixels.append(number_of_ones)
 
-        print("In the whole dataset, we have these values:")
-        print(exploration_sum_values)
+        #print("In the whole dataset, we have these values:")
+        #print(exploration_sum_values)
 
-        print("We have these numbers of alive pixels:")
-        print(array_of_number_of_change_pixels)
+        #print("We have these numbers of alive pixels:")
+        #print(array_of_number_of_change_pixels)
 
         self.debugger.save_arr(array_of_number_of_change_pixels)
 
@@ -554,18 +541,13 @@ class DatasetInstance_OurAerial(object):
         array_of_number_of_change_pixels = []
 
         for image in tqdm(labels):
-            values = self.debugger.occurancesInImage(image) # values we have are "1" and "0.0"
-            if 1 in values.keys(): # number 1 as a key signifies changed pixel
-                array_of_number_of_change_pixels.append(values[1])
-            else:
-                array_of_number_of_change_pixels.append(0)
+            number_of_ones = np.count_nonzero(image.flatten()) # << loading takes care of this 0 vs non-zero
+            array_of_number_of_change_pixels.append(number_of_ones)
 
-        print("We have these numbers of alive pixels:")
-        print(array_of_number_of_change_pixels)
+        #print("We have these numbers of alive pixels:")
+        #print(array_of_number_of_change_pixels)
 
         self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING")
-
-        # Pre-Computed by the helper
         array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING")
 
         array_of_number_of_change_pixels = array_of_number_of_change_pixels / (
