@@ -16,7 +16,7 @@ def main(args):
     settings = Settings.Settings(args)
     dataset = Dataset.Dataset(settings)
     #dataset.dataset
-    model = ModelHandler.ModelHandler(settings, dataset.dataset)
+    #model = ModelHandler.ModelHandler(settings, dataset.data)
 
     #model.model.train()
     #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights.h5")

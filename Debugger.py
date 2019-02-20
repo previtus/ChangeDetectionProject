@@ -23,6 +23,38 @@ class Debugger(object):
 
     ### DATASET VISUALIZATIONS:
 
+    def inspect_dataset(self,data,paths):
+        print("We have this data: L", data[0].shape, "R",data[1].shape, "V", data[2].shape)
+        print("We have this paths: L", len(paths[0]), "R",len(paths[1]), "V", len(paths[2]))
+        N_data = data[0].shape[0]
+        N_paths = len(paths[0])
+
+        to_check = 12
+        indices = random.sample(range(0, N_data), to_check)
+        lefts = []
+        rights = []
+        labels = []
+        txts = []
+
+        for idx in indices:
+            lefts.append(data[0][idx])
+            rights.append(data[1][idx])
+            labels.append(data[2][idx])
+            if N_data == N_paths:
+                txts.append(paths[0][idx][-20:] + "/" + paths[1][idx][-20:] + "/")
+                if paths[2][idx] is not None:
+                    txts[-1] += paths[2][idx][-20:]
+                else:
+                    txts[-1] += "None"
+                txts[-1] += "\n"
+
+        checked = 0
+        while checked < to_check:
+            self.viewTripples(lefts, rights, labels, txts, how_many=3, off=checked)
+            checked += 3
+
+
+
     #def dynamicRangeInSet(self, set_of_images):
     #    return 0
 
@@ -50,7 +82,7 @@ class Debugger(object):
         return values_dict
 
     # maybe also show avg value for labels? - to compare label<->predicted
-    def viewVectors(self, images, labels=[], how_many=6, off=0):
+    def viewVectors(self, images, texts=[], how_many=6, off=0):
 
         rows, columns = 2, 3
         #fig = plt.figure(figsize=(10, 8))
@@ -63,8 +95,8 @@ class Debugger(object):
             plt.imshow(label, cmap='gray')
 
             text = ""
-            if len(labels)>0:
-                text += str(round(labels[idx+off], 2))+"%"
+            if len(texts)>0:
+                text += str(round(texts[idx + off], 2)) + "%"
             #text += "Label shape "+str(label.shape)+"\n"+self.dynamicRangeInImage(label)
             #text = ""
             fig.gca().set(xlabel=text, xticks=[], yticks=[])
@@ -74,7 +106,7 @@ class Debugger(object):
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
 
-    def viewTripples(self, lefts, rights, labels, how_many=3, off=0):
+    def viewTripples(self, lefts, rights, labels, txts=[], how_many=3, off=0):
         #for i in range(len(lefts)):
         #    print(i, "=>", lefts[i].shape, rights[i].shape, labels[i].shape)
 
@@ -107,7 +139,11 @@ class Debugger(object):
             fig.add_subplot(rows, columns, k+2)
             #plt.imshow(label, cmap='gray')
             plt.imshow(label)#, cmap='gray')
-            text = "Label shape "+str(label.shape)+"\n"+self.dynamicRangeInImage(label)
+
+            text = ""
+            if len(txts) > 0:
+                text += txts[idx+off]
+            text += "Label shape "+str(label.shape)+"\n"+self.dynamicRangeInImage(label)
             fig.gca().set(xlabel=text, xticks=[], yticks=[])
             k += 3
 
@@ -240,97 +276,16 @@ class Debugger(object):
 
         plt.show()
 
-
-    # Data checking:
-
-    def check_balance_of_data(self, labels, optional_paths=''):
-        # In this we want to check how many pixels are marking "change" in each image
-
-        #labels = labels[0:500]
-
-        exploration_sum_values = {}
-        array_of_number_of_change_pixels = []
-
-        # slow part >>
-        """
-        for image in tqdm(labels):
-            values = self.occurancesInImage(image) # values we have are "1" and "0.0"
-            #print("values.keys()",values.keys())
-            for value in values:
-                #print("'",value,"'")
-                if value in exploration_sum_values:
-                    exploration_sum_values[value] += values[value]
-                else:
-                    exploration_sum_values[value] = values[value]
-            if 1 in values.keys(): # number 1 as a key signifies changed pixel
-                array_of_number_of_change_pixels.append(values[1])
-            else:
-                array_of_number_of_change_pixels.append(0)
-
-        print("In the whole dataset, we have these values:")
-        print(exploration_sum_values)
-
-        print("We have these numbers of alive pixels:")
-        print(array_of_number_of_change_pixels)
-
-        self.save_arr(array_of_number_of_change_pixels)
-        """
-        # << skip it, if you can
-        array_of_number_of_change_pixels = self.load_arr()
-
-        array_of_number_of_change_pixels = array_of_number_of_change_pixels / (256*256) * 100.0 # percentage of image changed
-
-        bigger_than_percent = 0.0
-
-        idx_examples_bigger = np.argwhere(array_of_number_of_change_pixels > bigger_than_percent)
-        original_array_of_number_of_change_pixels = array_of_number_of_change_pixels
-
-        less = [val for val in array_of_number_of_change_pixels if val <= bigger_than_percent]
-        array_of_number_of_change_pixels = [val for val in array_of_number_of_change_pixels if val > bigger_than_percent] # no zeros
-        print("The data which is >",bigger_than_percent,"% changed is ", len(array_of_number_of_change_pixels), "versus the remainder of", len(less))
-
-        # the histogram of the data
-        #fig = plt.figure(figsize=(10, 8))
-        fig = plt.figure()
-        bins = 100
-        values_of_bins, bins, patches = plt.hist(array_of_number_of_change_pixels, bins, facecolor='g', alpha=0.75)
-
-        print("values_of_bins", np.asarray(values_of_bins).astype(int))
-        print("bins sizes", bins)
-        plt.yscale('log', nonposy='clip')
-
-        plt.title('How much change in the 256x256 tiles?')
-        plt.xlabel('Percentage of pixels belonging to change')
-        plt.ylabel('Log scale of number of images/256x256 tiles')
-
-        plt.show()
-
-        if optional_paths is not '':
-            labels_to_show = []
-            txt_labels = []
-            for i in range(100):
-                idx = idx_examples_bigger[i][0]
-                label_image = optional_paths[idx]
-                labels_to_show.append(label_image)
-                txt_labels.append(original_array_of_number_of_change_pixels[idx])
-
-            import DataLoader
-            images = [DataLoader.DataLoader.load_vector_image(0, path) for path in labels_to_show]
-
-            self.viewVectors(images, txt_labels, how_many=6, off=0)
-            self.viewVectors(images, txt_labels, how_many=6, off=6)
-            self.viewVectors(images, txt_labels, how_many=6, off=12)
-
     # File helpers
 
     def mkdir(self, directory):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-    def save_arr(self, arr):
+    def save_arr(self, arr, specialname = ""):
 
         self.mkdir(self.settings.large_file_folder+"debuggerstuffs")
-        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr.h5"
+        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr"+specialname+".h5"
 
         hdf5_file = h5py.File(hdf5_path, mode='w')
         hdf5_file.create_dataset("arr", data=arr, dtype="float32")
@@ -338,8 +293,8 @@ class Debugger(object):
 
         print("Saved arr to:", hdf5_path)
 
-    def load_arr(self):
-        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr.h5"
+    def load_arr(self, specialname = ""):
+        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr"+specialname+".h5"
 
         hdf5_file = h5py.File(hdf5_path, "r")
         arr = hdf5_file['arr'][:]
