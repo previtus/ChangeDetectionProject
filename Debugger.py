@@ -252,6 +252,7 @@ class Debugger(object):
         array_of_number_of_change_pixels = []
 
         # slow part >>
+        """
         for image in tqdm(labels):
             values = self.occurancesInImage(image) # values we have are "1" and "0.0"
             #print("values.keys()",values.keys())
@@ -273,13 +274,13 @@ class Debugger(object):
         print(array_of_number_of_change_pixels)
 
         self.save_arr(array_of_number_of_change_pixels)
-
+        """
         # << skip it, if you can
         array_of_number_of_change_pixels = self.load_arr()
 
         array_of_number_of_change_pixels = array_of_number_of_change_pixels / (256*256) * 100.0 # percentage of image changed
 
-        bigger_than_percent = 10.0
+        bigger_than_percent = 0.0
 
         idx_examples_bigger = np.argwhere(array_of_number_of_change_pixels > bigger_than_percent)
         original_array_of_number_of_change_pixels = array_of_number_of_change_pixels

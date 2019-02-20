@@ -4,7 +4,7 @@
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
 #os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-import Debugger
+import Debugger, DataPreprocesser
 import keras
 from keras.layers import Input, Dense
 from keras.models import Model
@@ -19,14 +19,15 @@ class Model1_SkipSiamFCN(object):
     def __init__(self, settings, dataset):
         self.settings = settings
         self.dataset = dataset
+        self.dataPreprocesser = DataPreprocesser.DataPreprocesser(settings)
         self.debugger = Debugger.Debugger(settings)
 
-        self.model = self.create_model(256)
+        self.model = self.create_model(None)
         self.model.summary()
 
 
         self.local_setting_batch_size = 32
-        self.local_setting_epochs = 5
+        self.local_setting_epochs = 100
 
     def train(self):
         print("Train")
@@ -34,22 +35,25 @@ class Model1_SkipSiamFCN(object):
         lefts, rights, labels = self.dataset
 
         # 3 channels only - rgb
-        lefts = lefts[:,:,:,1:4]
-        rights = rights[:,:,:,1:4]
+        if lefts.shape[3] > 3:
+            lefts = lefts[:,:,:,1:4]
+            rights = rights[:,:,:,1:4]
         # label also reshape
         labels = labels.reshape(labels.shape + (1,))
 
-        """
+
         print("left images")
         self.debugger.explore_set_stats(lefts)
         print("right images")
         self.debugger.explore_set_stats(rights)
         print("label images")
         self.debugger.explore_set_stats(labels)
-        """
 
-        split_idx = 4000
-        split_test_idx = 4500
+
+        #split_idx = 4000
+        #split_test_idx = 4500
+        split_idx = 370
+        split_test_idx = 371
         train_X_left = lefts[0:split_idx]
         train_X_right = rights[0:split_idx]
         train_Y = labels[0:split_idx]
@@ -66,12 +70,18 @@ class Model1_SkipSiamFCN(object):
 
         self.debugger.nice_plot_history(history, no_val=True)
 
-    def save(self):
-        self.model.save_weights(self.settings.large_file_folder+"last_trained_model_weights.h5")
+    def save(self, path=""):
+        if path == "":
+            self.model.save_weights(self.settings.large_file_folder+"last_trained_model_weights.h5")
+        else:
+            self.model.save_weights(path)
         print("Saved model weights.")
 
-    def load(self):
-        self.model.load_weights(self.settings.large_file_folder+"last_trained_model_weights.h5")
+    def load(self, path=""):
+        if path == "":
+            self.model.load_weights(self.settings.large_file_folder+"last_trained_model_weights.h5")
+        else:
+            self.model.load_weights(path)
         print("Loaded model weights.")
 
     def test(self):
@@ -79,16 +89,17 @@ class Model1_SkipSiamFCN(object):
 
         lefts, rights, labels = self.dataset
 
-        # 3 channels only - rgb
-        lefts = lefts[:,:,:,1:4]
-        rights = rights[:,:,:,1:4]
+        if lefts.shape[3] > 3:
+            # 3 channels only - rgb
+            lefts = lefts[:,:,:,1:4]
+            rights = rights[:,:,:,1:4]
         # label also reshape
         labels = labels.reshape(labels.shape + (1,))
 
         print(lefts.shape)
 
         split_test_idx = 4500
-        split_test_idx = 800
+        split_test_idx = 371
         test_X_left = lefts[split_test_idx:]
         test_X_right = rights[split_test_idx:]
         test_Y = labels[split_test_idx:]
@@ -98,6 +109,10 @@ class Model1_SkipSiamFCN(object):
         # chop off that last dimension
         predicted = predicted.reshape(predicted.shape[:-1])
         test_Y = test_Y.reshape(test_Y.shape[:-1])
+
+
+        # undo preprocessing steps?
+        predicted = self.dataPreprocesser.postprocess_labels(predicted)
 
 
         print("left images")
@@ -111,7 +126,7 @@ class Model1_SkipSiamFCN(object):
 
         off = 0
         while off < len(predicted):
-            self.debugger.viewTripples(test_X_left, test_X_right, test_Y, how_many=4, off=off)
+            #self.debugger.viewTripples(test_X_left, test_X_right, test_Y, how_many=4, off=off)
             self.debugger.viewQuadrupples(test_X_left, test_X_right, test_Y, predicted, how_many=4, off=off)
             off += 4
 

@@ -16,11 +16,12 @@ def main(args):
     settings = Settings.Settings(args)
     dataset = Dataset.Dataset(settings)
     #dataset.dataset
-    #model = ModelHandler.ModelHandler(settings, dataset.dataset)
+    model = ModelHandler.ModelHandler(settings, dataset.dataset)
 
     #model.model.train()
-    #model.model.save()
-    #model.model.load()
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights.h5")
+    #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")
     #model.model.test()
 
 if __name__ == '__main__':
