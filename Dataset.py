@@ -12,12 +12,12 @@ class Dataset(object):
         self.dataPreprocesser = DataPreprocesser.DataPreprocesser(settings)
         self.debugger = Debugger.Debugger(settings)
 
-        dataset_variant = 112
+        dataset_variant = 256
         self.datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, self.dataLoader, dataset_variant)
         #self.datasetInstance = DatasetInstance_ONERA.DatasetInstance_ONERA(settings, self)
 
         self.data, self.paths = self.datasetInstance.load_dataset()
-        self.debugger.inspect_dataset(self.data, self.paths)
+        self.debugger.inspect_dataset(self.data, self.paths, 30)
 
         print("Dataset loaded with", len(self.data[0]), "images.")
 

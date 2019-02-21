@@ -44,38 +44,43 @@ class DatasetInstance_OurAerial(object):
             self.SUBSET = 5000
             self.SUBSET = -1
             self.IMAGE_RESOLUTION = 256
+            self.LOAD_BATCH_INCREMENT = 10000 # loads in this big batches for each balancing
 
-            self.bigger_than_percent = 3.0  # 8.0 from full set
-            self.smaller_than_percent = 0.0  # 3.0 ?
+            self.bigger_than_percent = 8.0  # 8.0 from full set
+            self.smaller_than_percent = 1.0  # 3.0 ?
 
             self.default_raster_shape = (256,256,4)
             self.default_vector_shape = (256,256)
 
-            # select one manually! sub<X> says how many actual samples it has (after balancing and valid checks)
-            self.hdf5_path = self.settings.large_file_folder + "datasets/" + self.save_path_ + "5000_res256x256.h5"
-            #self.hdf5_path = self.settings.large_file_folder + "datasets/" + self.save_path_ + "1000_res256x256.h5"
-            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_sub708_res256x256.h5"
+            # decent dataset:
+            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL8.0_1.0_sel1428_res256x256.h5"
 
-        elif  self.variant == 112:
+        elif self.variant == 112:
             self.dataset_version = "112x112"
             #self.SUBSET = 118667
             self.SUBSET = 1000
             self.SUBSET = 5000
             self.SUBSET = -1
-            self.SUBSET = 80000
+            #self.SUBSET = 80000
+            # problem with mem failure at around 181k vector images opened from the total of cca 359k - we should probably batch instead...
+            # first 100k in reality balances out to: 220+220 rasters (LR each one) (with 18 percent)
+            # self.SUBSET = 4000
+            self.LOAD_BATCH_INCREMENT = 100000
+            #self.LOAD_BATCH_INCREMENT = 40000
+
 
             self.IMAGE_RESOLUTION = 112
 
             self.bigger_than_percent = 18.0  # 18.0
-            self.smaller_than_percent = 0.0  # 5.0
+            self.smaller_than_percent = 1.0  # 5.0
 
             self.default_raster_shape = (112, 112, 4)
             self.default_vector_shape = (112, 112)
 
-            # select one manually! sub<X> says how many actual samples it has (after balancing and valid checks)
-            self.hdf5_path = self.settings.large_file_folder + "datasets/" + self.save_path_ + "5000_res112x112.h5"
-            #self.hdf5_path = self.settings.large_file_folder + "datasets/" + self.save_path_ + "1000_res112x112.h5"
-            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL2.0_0.0_sel18_res112x112.h5"
+
+            # decent dataset:
+            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel254_res112x112.h5"
+            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel2380_res112x112.h5"
 
 
 
@@ -96,14 +101,14 @@ class DatasetInstance_OurAerial(object):
 
     def load_dataset(self):
         load_paths_from_folders = False  # TRUE To recompute the paths from folder
-        load_images_anew = True         # TRUE To reload images from the files directly + rebalance them
+        load_images_anew = False         # TRUE To reload images from the files directly + rebalance them
 
         # load_image_paths()
         # save_image_paths_to_cache()
 
         if load_paths_from_folders:
             # Load paths
-            print("Loading all paths from input folders:")
+            print("\nLoading all paths from input folders:")
             lefts_paths, rights_paths, labels_paths = self.load_paths_from_folders()
             self.dataLoader.save_paths(lefts_paths, self.settings.large_file_folder + "saved_paths_2012_"+self.dataset_version+"ALL.pickle")
             self.dataLoader.save_paths(rights_paths, self.settings.large_file_folder + "saved_paths_2015_"+self.dataset_version+"ALL.pickle")
@@ -131,28 +136,58 @@ class DatasetInstance_OurAerial(object):
         if load_images_anew:
             # Load data
 
-            # It would be more elegant:
-            # 1 load labels
-            # 2 check balance
-            # 3 load from these
-            # 4 check shapes
+            print("\nLoading vector images:")
 
-            print("Loading vector images:")
-            labels = []
-            for path in tqdm(labels_paths):
-                labels.append(self.load_vector_image(path))
-            lefts = []
-            for path in lefts_paths:
-                lefts.append([[0]])  # empty now
-            rights = []
-            for path in rights_paths:
-                rights.append([[0]]) # empty now
+            total = len(labels_paths)
+            batch_i = 0
 
-            # balance data
-            print("Checking the balance in labels:")
-            lefts, rights, labels, lefts_paths, rights_paths, labels_paths = self.balance_data(lefts, rights, labels, lefts_paths, rights_paths, labels_paths)
+            overAllBatches_lefts_paths = []
+            overAllBatches_rights_paths = []
+            overAllBatches_labels_paths = []
 
-            print("Loading balanced set of raster images:")
+            print("\nLoading vector images (in batches):")
+            while batch_i < total:
+                inc = np.min([total-batch_i, self.LOAD_BATCH_INCREMENT])
+                limits = [batch_i, batch_i+inc]
+                print("Batch limits:", limits)
+
+                labels_batch = []
+
+                V = []
+                for i in range(limits[0], limits[1]):
+                    V.append(labels_paths[i])
+                L = []
+                for i in range(limits[0], limits[1]):
+                    L.append(lefts_paths[i])
+                R = []
+                for i in range(limits[0], limits[1]):
+                    R.append(rights_paths[i])
+
+                for path in tqdm( V ):
+                    labels_batch.append(self.load_vector_image(path))
+
+                new_lefts_paths, new_rights_paths, new_labels_paths = self.balance_data(labels_batch, L, R, V)
+
+                #print("Checking paths from the batch:")
+                #self.debugger.check_paths(new_lefts_paths, new_rights_paths, new_labels_paths)
+
+                for i in range(len(new_labels_paths)):
+                    overAllBatches_labels_paths.append(new_labels_paths[i])
+                for i in range(len(new_lefts_paths)):
+                    overAllBatches_lefts_paths.append(new_lefts_paths[i])
+                for i in range(len(new_rights_paths)):
+                    overAllBatches_rights_paths.append(new_rights_paths[i])
+
+                batch_i += inc
+
+            lefts_paths = overAllBatches_lefts_paths
+            rights_paths = overAllBatches_rights_paths
+            labels_paths = overAllBatches_labels_paths
+
+            #print("Checking paths after batches concatted them:")
+            #self.debugger.check_paths(lefts_paths, rights_paths, labels_paths)
+
+            print("\nLoading balanced set of raster images:")
             new_lefts = []
             for path in tqdm(lefts_paths):
                 new_lefts.append(self.load_raster_image(path))
@@ -161,11 +196,15 @@ class DatasetInstance_OurAerial(object):
             for path in tqdm(rights_paths):
                 new_rights.append(self.load_raster_image(path))
             rights = new_rights
+            new_labels = []
+            for path in tqdm(labels_paths):
+                new_labels.append(self.load_vector_image(path))
+            labels = new_labels
 
             lefts, rights, labels, lefts_paths, rights_paths, labels_paths = self.check_shapes(lefts, rights, labels, lefts_paths, rights_paths, labels_paths)
 
-
-            #self.check_balance_of_data(labels, labels_paths)  ## CHECKING HOW MUCH CHANGE OCCURED, SLOW
+            #print("Now it should still be the same as the last one ^^^ ")
+            #self.check_balance_of_data(labels, labels_paths)
 
             labels = np.asarray(labels).astype('float32')
             rights = np.asarray(rights).astype('float32')
@@ -176,27 +215,55 @@ class DatasetInstance_OurAerial(object):
             lefts = np.asarray(lefts).astype('uint8')
             rights = np.asarray(rights).astype('uint8')
 
-            self.dataLoader.save_paths(lefts_paths, self.settings.large_file_folder + "saved_paths_2012_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
-            self.dataLoader.save_paths(rights_paths, self.settings.large_file_folder + "saved_paths_2015_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
-            self.dataLoader.save_paths(labels_paths, self.settings.large_file_folder + "saved_paths_vectors_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
+            name = str(self.SUBSET)+"_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle"
+            self.dataLoader.save_paths(lefts_paths, self.settings.large_file_folder + "LEFT_"+name)
+            self.dataLoader.save_paths(rights_paths, self.settings.large_file_folder + "RIGHT_"+name)
+            self.dataLoader.save_paths(labels_paths, self.settings.large_file_folder + "LABELS_"+name)
 
         else:
             # These loaded images are valid (all the same resolution) and balanced according to the setting.
+
+            print("loading images such as:", self.hdf5_path)
 
             lefts, rights, labels = self.dataLoader.load_images_from_h5(self.hdf5_path)
             lefts = np.asarray(lefts).astype('uint8')
             rights = np.asarray(rights).astype('uint8')
             labels = np.asarray(labels).astype('float32')
 
+
+            print("loading paths such as:", self.settings.large_file_folder + "saved_paths_2012_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
+
+            name = str(self.SUBSET)+"_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle"
+
             lefts_paths = self.dataLoader.load_paths_from_pickle(
-                self.settings.large_file_folder + "saved_paths_2012_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
+                self.settings.large_file_folder + "LEFT_" + name)
             rights_paths = self.dataLoader.load_paths_from_pickle(
-                self.settings.large_file_folder + "saved_paths_2015_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
+                self.settings.large_file_folder + "RIGHT_" + name)
             labels_paths = self.dataLoader.load_paths_from_pickle(
-                self.settings.large_file_folder + "saved_paths_vectors_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
+                self.settings.large_file_folder + "LABELS_" + name)
 
+            # test that they are the same
+            """
+            print("\n.... reloading images .... ")
+            new_lefts = []
+            new_rights = []
+            new_labels = []
+            for path in tqdm(labels_paths):
+                new_labels.append(self.load_vector_image(path))
+            for path in tqdm(lefts_paths):
+                new_lefts.append(self.load_raster_image(path))
+            for path in tqdm(rights_paths):
+                new_rights.append(self.load_raster_image(path))
+            new_lefts = np.asarray(new_lefts).astype('uint8')
+            new_rights = np.asarray(new_rights).astype('uint8')
+            new_labels = np.asarray(new_labels).astype('float32')
+            self.debugger.viewTripples(lefts, rights, labels, off=0, how_many=3)
+            self.debugger.viewTripples(new_lefts, new_rights, new_labels, off=0, how_many=3)
+            """
 
-        # self.debugger.viewTripples(lefts, rights, labels, off=0, how_many=3)
+        print("Last balance check:")
+        self.check_balance_of_data(labels, labels_paths)
+
         data = [lefts, rights, labels]
         paths = [lefts_paths, rights_paths, labels_paths]
         return data, paths
@@ -535,9 +602,7 @@ class DatasetInstance_OurAerial(object):
             #self.debugger.viewVectors(images, txt_labels, how_many=6, off=6)
             #self.debugger.viewVectors(images, txt_labels, how_many=6, off=12)
 
-
-    def balance_data(self, lefts, rights, labels, lefts_paths, rights_paths, labels_paths):
-        # SLOW!
+    def balance_data(self, labels, lefts_paths, rights_paths, labels_paths):
         array_of_number_of_change_pixels = []
 
         for image in tqdm(labels):
@@ -591,15 +656,6 @@ class DatasetInstance_OurAerial(object):
 
             #print("adding", idx_smaller, idx_bigger)
 
-            new_lefts.append(lefts[idx_smaller])
-            new_lefts.append(lefts[idx_bigger])
-
-            new_rights.append(rights[idx_smaller])
-            new_rights.append(rights[idx_bigger])
-
-            new_labels.append(labels[idx_smaller])
-            new_labels.append(labels[idx_bigger])
-
             new_lefts_paths.append(lefts_paths[idx_smaller])
             new_lefts_paths.append(lefts_paths[idx_bigger])
 
@@ -609,4 +665,4 @@ class DatasetInstance_OurAerial(object):
             new_labels_paths.append(labels_paths[idx_smaller])
             new_labels_paths.append(labels_paths[idx_bigger])
 
-        return new_lefts, new_rights, new_labels, new_lefts_paths, new_rights_paths, new_labels_paths
+        return new_lefts_paths, new_rights_paths, new_labels_paths

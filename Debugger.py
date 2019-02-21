@@ -23,13 +23,13 @@ class Debugger(object):
 
     ### DATASET VISUALIZATIONS:
 
-    def inspect_dataset(self,data,paths):
+    def inspect_dataset(self,data,paths, to_check = 12):
         print("We have this data: L", data[0].shape, "R",data[1].shape, "V", data[2].shape)
         print("We have this paths: L", len(paths[0]), "R",len(paths[1]), "V", len(paths[2]))
         N_data = data[0].shape[0]
         N_paths = len(paths[0])
 
-        to_check = 12
+        to_check = np.min([to_check,N_data])
         indices = random.sample(range(0, N_data), to_check)
         lefts = []
         rights = []
@@ -47,12 +47,26 @@ class Debugger(object):
                 else:
                     txts[-1] += "None"
                 txts[-1] += "\n"
+            #print(idx," : ", txts[-1])
 
         checked = 0
         while checked < to_check:
             self.viewTripples(lefts, rights, labels, txts, how_many=3, off=checked)
             checked += 3
 
+    def check_paths(self, left_paths, right_paths, label_paths, to_check = 12):
+        N_paths = len(left_paths)
+        to_check = np.min([to_check,N_paths])
+        indices = random.sample(range(0, N_paths), to_check)
+
+        for idx in indices:
+            l = left_paths[idx].split("/")[-1]
+            r = right_paths[idx].split("/")[-1]
+            if label_paths[idx] is not None:
+                v = label_paths[idx].split("/")[-1]
+            else:
+                v = "None"
+            print(l, ",\t\t", r , ",\t\t", v)
 
 
     #def dynamicRangeInSet(self, set_of_images):
