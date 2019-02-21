@@ -40,8 +40,7 @@ class DatasetInstance_OurAerial(object):
 
         if self.variant == 256:
             self.dataset_version = "256x256_over32"
-            self.SUBSET = 83000
-            self.SUBSET = 5000
+            #self.SUBSET = 83000
             self.SUBSET = -1
             self.IMAGE_RESOLUTION = 256
             self.LOAD_BATCH_INCREMENT = 10000 # loads in this big batches for each balancing
@@ -55,18 +54,17 @@ class DatasetInstance_OurAerial(object):
             # decent dataset:
             self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL8.0_1.0_sel1428_res256x256.h5"
 
+            # spliting <1428>
+            # 1200 train, 100 val, 128 test
+            self.split_train = 1200
+            self.split_val = 1300
+
+
         elif self.variant == 112:
             self.dataset_version = "112x112"
             #self.SUBSET = 118667
-            self.SUBSET = 1000
-            self.SUBSET = 5000
             self.SUBSET = -1
-            #self.SUBSET = 80000
-            # problem with mem failure at around 181k vector images opened from the total of cca 359k - we should probably batch instead...
-            # first 100k in reality balances out to: 220+220 rasters (LR each one) (with 18 percent)
-            # self.SUBSET = 4000
             self.LOAD_BATCH_INCREMENT = 100000
-            #self.LOAD_BATCH_INCREMENT = 40000
 
 
             self.IMAGE_RESOLUTION = 112
@@ -77,12 +75,37 @@ class DatasetInstance_OurAerial(object):
             self.default_raster_shape = (112, 112, 4)
             self.default_vector_shape = (112, 112)
 
-
             # decent dataset:
             self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel254_res112x112.h5"
             self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel2380_res112x112.h5"
 
+            # spliting <2380>
+            # 2200 train, 100 val, 80 test
+            self.split_train = 2200
+            self.split_val = 2300
 
+    def split_train_val_test(self, data):
+        lefts, rights, labels = data
+
+        # split [0 : split_train] [split_train : split_val] [split_val : end]
+
+        train_L = lefts[0:self.split_train]
+        train_R = rights[0:self.split_train]
+        train_V = labels[0:self.split_train]
+
+        val_L = lefts[self.split_train:self.split_val]
+        val_R = rights[self.split_train:self.split_val]
+        val_V = labels[self.split_train:self.split_val]
+
+        test_L = lefts[self.split_val:]
+        test_R = rights[self.split_val:]
+        test_V = labels[self.split_val:]
+
+        train = [train_L, train_R, train_V]
+        val = [val_L, val_R, val_V]
+        test = [test_L, test_R, test_V]
+
+        return train, val, test
 
     def get_paths(self):
         lefts_paths = []
@@ -261,8 +284,10 @@ class DatasetInstance_OurAerial(object):
             self.debugger.viewTripples(new_lefts, new_rights, new_labels, off=0, how_many=3)
             """
 
-        print("Last balance check:")
-        self.check_balance_of_data(labels, labels_paths)
+
+        if self.settings.verbose >= 3:
+            print("Last balance check:")
+            self.check_balance_of_data(labels, labels_paths)
 
         data = [lefts, rights, labels]
         paths = [lefts_paths, rights_paths, labels_paths]

@@ -25,45 +25,36 @@ class Model1_SkipSiamFCN(object):
         self.model = self.create_model(None)
         self.model.summary()
 
-
         self.local_setting_batch_size = 32
-        self.local_setting_epochs = 100
+        self.local_setting_epochs = 5
 
     def train(self):
         print("Train")
 
-        lefts, rights, labels = self.dataset
+        train_L, train_R, train_V = self.dataset.train
+        val_L, val_R, val_V = self.dataset.val
+
 
         # 3 channels only - rgb
-        if lefts.shape[3] > 3:
-            lefts = lefts[:,:,:,1:4]
-            rights = rights[:,:,:,1:4]
+        if train_L.shape[3] > 3:
+            train_L = train_L[:,:,:,1:4]
+            train_R = train_R[:,:,:,1:4]
+            val_L = val_L[:,:,:,1:4]
+            val_R = val_R[:,:,:,1:4]
         # label also reshape
-        labels = labels.reshape(labels.shape + (1,))
+        train_V = train_V.reshape(train_V.shape + (1,))
+        val_V = val_V.reshape(val_V.shape + (1,))
 
 
-        print("left images")
-        self.debugger.explore_set_stats(lefts)
-        print("right images")
-        self.debugger.explore_set_stats(rights)
-        print("label images")
-        self.debugger.explore_set_stats(labels)
+        print("left images (train)")
+        self.debugger.explore_set_stats(train_L)
+        print("right images (train)")
+        self.debugger.explore_set_stats(train_R)
+        print("label images (train)")
+        self.debugger.explore_set_stats(train_V)
 
-
-        #split_idx = 4000
-        #split_test_idx = 4500
-        split_idx = 370
-        split_test_idx = 371
-        train_X_left = lefts[0:split_idx]
-        train_X_right = rights[0:split_idx]
-        train_Y = labels[0:split_idx]
-
-        val_X_left = lefts[split_idx:split_test_idx]
-        val_X_right = rights[split_idx:split_test_idx]
-        val_Y = labels[split_idx:split_test_idx]
-
-        history = self.model.fit([train_X_left, train_X_right], train_Y, batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
-                                 validation_data=([val_X_left, val_X_right], val_Y))
+        history = self.model.fit([train_L, train_R], train_V, batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
+                                 validation_data=([val_L, val_R], val_V))
 
         print(history)
         history.history["accuracy"] = history.history["acc"]
@@ -87,50 +78,47 @@ class Model1_SkipSiamFCN(object):
     def test(self):
         print("Test")
 
-        lefts, rights, labels = self.dataset
+        test_L, test_R, test_V = self.dataset.test
 
-        if lefts.shape[3] > 3:
+        if test_L.shape[3] > 3:
             # 3 channels only - rgb
-            lefts = lefts[:,:,:,1:4]
-            rights = rights[:,:,:,1:4]
+            test_L = test_L[:,:,:,1:4]
+            test_R = test_R[:,:,:,1:4]
         # label also reshape
-        labels = labels.reshape(labels.shape + (1,))
+        test_V = test_V.reshape(test_V.shape + (1,))
 
-        print(lefts.shape)
+        predicted = self.model.predict([test_L, test_R])
 
-        split_test_idx = 4500
-        split_test_idx = 371
-        test_X_left = lefts[split_test_idx:]
-        test_X_right = rights[split_test_idx:]
-        test_Y = labels[split_test_idx:]
-
-        predicted = self.model.predict([test_X_left, test_X_right])
+        print(predicted)
+        print(len(predicted))
 
         # chop off that last dimension
         predicted = predicted.reshape(predicted.shape[:-1])
-        test_Y = test_Y.reshape(test_Y.shape[:-1])
+        test_V = test_V.reshape(test_V.shape[:-1])
 
 
         # undo preprocessing steps?
         predicted = self.dataPreprocesser.postprocess_labels(predicted)
+        test_L = self.dataPreprocesser.postprocess_images(test_L)
+        test_R = self.dataPreprocesser.postprocess_images(test_R)
 
 
         print("left images")
-        self.debugger.explore_set_stats(test_X_left)
+        self.debugger.explore_set_stats(test_L)
         print("right images")
-        self.debugger.explore_set_stats(test_X_right)
+        self.debugger.explore_set_stats(test_R)
         print("label images")
-        self.debugger.explore_set_stats(test_Y)
+        self.debugger.explore_set_stats(test_V)
         print("predicted images")
         self.debugger.explore_set_stats(predicted)
 
         off = 0
         while off < len(predicted):
-            #self.debugger.viewTripples(test_X_left, test_X_right, test_Y, how_many=4, off=off)
-            self.debugger.viewQuadrupples(test_X_left, test_X_right, test_Y, predicted, how_many=4, off=off)
+            #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
+            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=4, off=off)
             off += 4
 
-    def create_model(self, input_size = 112, kernel_size = (3, 3), pool_size = (2, 2), up_size = (2, 2)):
+    def create_model(self, input_size = 112, channels = 3, kernel_size = (3, 3), pool_size = (2, 2), up_size = (2, 2)):
         # input_size = None
         # building blocks:
 
@@ -143,7 +131,7 @@ class Model1_SkipSiamFCN(object):
         # keras.layers.UpSampling2D(size=(2, 2), data_format=None, interpolation='nearest')
 
 
-        input = Input(shape=(input_size, input_size, 3))
+        input = Input(shape=(input_size, input_size, channels))
         # 1st block
         x = keras.layers.Conv2D(16, kernel_size, padding="same")(input)
         skip16 = keras.layers.Conv2D(16, kernel_size, padding="same")(x)
