@@ -21,7 +21,7 @@ class Model1_SkipSiamFCN(object):
     def __init__(self, settings, dataset):
         self.settings = settings
         self.dataset = dataset
-        self.dataPreprocesser = DataPreprocesser.DataPreprocesser(settings)
+        self.dataPreprocesser = dataset.dataPreprocesser
         self.debugger = Debugger.Debugger(settings)
 
         self.use_sigmoid_or_softmax = 'softmax' # softmax is for multiple categories
@@ -126,11 +126,8 @@ class Model1_SkipSiamFCN(object):
         # undo preprocessing steps?
         predicted = self.dataPreprocesser.postprocess_labels(predicted)
 
+        test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
 
-        #test_L = self.dataPreprocesser.postprocess_images(test_L)
-        #test_R = self.dataPreprocesser.postprocess_images(test_R)
-
-        test_L, test_R, _ = self.dataset.original_test
 
         if test_L.shape[3] > 3:
             # 3 channels only - rgb
