@@ -220,17 +220,17 @@ class Debugger(object):
         fig, ax = plt.subplots()
 
         loss = history.history["loss"]
-        accuracy = history.history["accuracy"]
+        accuracy = history.history["acc"]
         if not no_val:
             val_loss = history.history["val_loss"]
-            val_accuracy = history.history["val_accuracy"]
+            val_accuracy = history.history["val_acc"]
 
         data = [loss, accuracy]
         columns = ['loss', 'accuracy']
 
         if not no_val:
             data = [loss, val_loss, accuracy, val_accuracy]
-            columns = ['loss', 'val_loss', 'accuracy', 'val_accuracy']
+            columns = ['loss', 'val_loss', 'acc', 'val_acc']
 
         df = pd.DataFrame(data)
         df = df.transpose()
@@ -254,12 +254,12 @@ class Debugger(object):
                                  size='medium', color=color, weight='semibold')
             return [line_item, text_item]
 
-        accuracies += plot_item("accuracy", "blue")
+        accuracies += plot_item("acc", "blue")
         if not no_val:
-            accuracies += plot_item("val_accuracy", "orange")
+            accuracies += plot_item("val_acc", "orange")
 
         losses += plot_item("loss", "green", max_wanted=False)
-        max_val = df["accuracy"].max()
+        max_val = df["acc"].max()
 
         if not no_val:
             losses += plot_item("val_loss", "brown", max_wanted=False)

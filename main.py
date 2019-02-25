@@ -18,9 +18,18 @@ def main(args):
     #dataset.dataset
     model = ModelHandler.ModelHandler(settings, dataset)
 
-    model.model.train()
-    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset.h5")
-    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset.h5")
+    #model.model.train()
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_sigmoid_50ep.h5")
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_softmax_50ep.h5")
+
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_.h5")
+    model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_.h5")
+
+
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset_backwards20.h5")
+
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset.h5")
 
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights.h5")
     #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")

@@ -10,6 +10,8 @@ from keras.layers import Input, Dense
 from keras.models import Model
 #from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 from keras.optimizers import Adam
+from keras.utils import to_categorical
+import numpy as np
 
 class Model1_SkipSiamFCN(object):
     """
@@ -22,11 +24,15 @@ class Model1_SkipSiamFCN(object):
         self.dataPreprocesser = DataPreprocesser.DataPreprocesser(settings)
         self.debugger = Debugger.Debugger(settings)
 
-        self.model = self.create_model(None)
+        self.use_sigmoid_or_softmax = 'softmax' # softmax is for multiple categories
+
+        self.model = self.create_model(input_size = None, channels = 3)
         self.model.summary()
 
         self.local_setting_batch_size = 32
-        self.local_setting_epochs = 5
+        self.local_setting_epochs = 100
+
+
 
     def train(self):
         print("Train")
@@ -41,6 +47,7 @@ class Model1_SkipSiamFCN(object):
             train_R = train_R[:,:,:,1:4]
             val_L = val_L[:,:,:,1:4]
             val_R = val_R[:,:,:,1:4]
+
         # label also reshape
         train_V = train_V.reshape(train_V.shape + (1,))
         val_V = val_V.reshape(val_V.shape + (1,))
@@ -53,13 +60,22 @@ class Model1_SkipSiamFCN(object):
         print("label images (train)")
         self.debugger.explore_set_stats(train_V)
 
+        if self.use_sigmoid_or_softmax == 'softmax':
+            train_V = to_categorical(train_V)
+            val_V = to_categorical(val_V)
+
         history = self.model.fit([train_L, train_R], train_V, batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
                                  validation_data=([val_L, val_R], val_V))
+        print(history.history)
+        if self.use_sigmoid_or_softmax == 'sigmoid':
+            history.history["acc"] = history.history["binary_accuracy"]
+            history.history["val_acc"] = history.history["val_binary_accuracy"]
+        else:
+            history.history["acc"] = history.history["categorical_accuracy"]
+            history.history["val_acc"] = history.history["val_categorical_accuracy"]
+        print(history.history)
 
-        print(history)
-        history.history["accuracy"] = history.history["acc"]
-
-        self.debugger.nice_plot_history(history, no_val=True)
+        self.debugger.nice_plot_history(history)
 
     def save(self, path=""):
         if path == "":
@@ -89,27 +105,46 @@ class Model1_SkipSiamFCN(object):
 
         predicted = self.model.predict([test_L, test_R])
 
-        print(predicted)
-        print(len(predicted))
+        if self.use_sigmoid_or_softmax == 'softmax':
+            #print("Predicted is now in this shape:")
+            #print("predicted.shape:", predicted.shape)
+            #self.debugger.viewVectors(predicted[:,:,:,1])
+            #self.debugger.viewVectors(predicted[:,:,:,0])
 
-        # chop off that last dimension
-        predicted = predicted.reshape(predicted.shape[:-1])
+            # with just 2 classes I can hax:
+            predicted = predicted[:, :, :, 1]
+
+            # else:
+            #predicted = np.argmax(predicted, axis=3)
+            #print("predicted.shape:", predicted.shape)
+        else:
+            # chop off that last dimension
+            predicted = predicted.reshape(predicted.shape[:-1])
+
         test_V = test_V.reshape(test_V.shape[:-1])
-
 
         # undo preprocessing steps?
         predicted = self.dataPreprocesser.postprocess_labels(predicted)
-        test_L = self.dataPreprocesser.postprocess_images(test_L)
-        test_R = self.dataPreprocesser.postprocess_images(test_R)
 
 
-        print("left images")
+        #test_L = self.dataPreprocesser.postprocess_images(test_L)
+        #test_R = self.dataPreprocesser.postprocess_images(test_R)
+
+        test_L, test_R, _ = self.dataset.original_test
+
+        if test_L.shape[3] > 3:
+            # 3 channels only - rgb
+            test_L = test_L[:,:,:,1:4]
+            test_R = test_R[:,:,:,1:4]
+
+
+        print("left images (test)")
         self.debugger.explore_set_stats(test_L)
-        print("right images")
+        print("right images (test)")
         self.debugger.explore_set_stats(test_R)
-        print("label images")
+        print("label images (test)")
         self.debugger.explore_set_stats(test_V)
-        print("predicted images")
+        print("predicted images (test)")
         self.debugger.explore_set_stats(predicted)
 
         off = 0
@@ -161,8 +196,8 @@ class Model1_SkipSiamFCN(object):
         siamese_model_encode.summary()
 
         # Then merging
-        input_a = Input(shape=(input_size, input_size, 3))
-        input_b = Input(shape=(input_size, input_size, 3))
+        input_a = Input(shape=(input_size, input_size, channels))
+        input_b = Input(shape=(input_size, input_size, channels))
 
         branch_a, skip16_a, skip32_a, skip64_a, skip128_a = siamese_model_encode([input_a])
         branch_b, skip16_b, skip32_b, skip64_b, skip128_b = siamese_model_encode([input_b])
@@ -200,7 +235,19 @@ class Model1_SkipSiamFCN(object):
 
         # within 0-1
         # and just 1 channel
-        final_out = keras.layers.Conv2D(1, (1, 1), activation='sigmoid')(final_out)
+        if self.use_sigmoid_or_softmax == 'softmax':
+            activ = "softmax"
+            loss = "categorical_crossentropy"
+            metric = "categorical_accuracy"
+
+            classes_out = 2 #now at least, only 0 or 1
+        else:
+            activ = "sigmoid"
+            loss = "binary_crossentropy"
+            metric = "binary_accuracy"
+            classes_out = 1  # between 0-1 its a real num
+
+        final_out = keras.layers.Conv2D(classes_out, (1, 1), activation=activ)(final_out)
 
         print("<< Full model >>")
         full_model = Model([input_a, input_b], final_out)
@@ -211,7 +258,25 @@ class Model1_SkipSiamFCN(object):
         # model.compile(optimizer=Adam(lr=0.001), loss="binary_crossentropy", metrics=["accuracy"])
         # model.compile(optimizer=Adam(lr=0.0001), loss='binary_crossentropy', metrics=['accuracy'])
 
-        model.compile(optimizer=Adam(lr=0.00001), loss='binary_crossentropy', metrics=['accuracy'])
+        """ Experiment
+        # with the contrastive loss the labeling was done in other way around!, which gives us the opposite predictions
+        from keras import backend as K
+        def contrastive_loss(y_true, y_pred):
+            '''Contrastive loss from Hadsell-et-al.'06
+            http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
+            '''
+            margin = 1
+            sqaure_pred = K.square(y_pred)
+            margin_square = K.square(K.maximum(margin - y_pred, 0))
+            return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
+        """
+
+        model.compile(optimizer=Adam(lr=0.00001), loss=loss, metrics=[metric, 'mse'])
+
+        # output dim depending on the type of a problem: https://stats.stackexchange.com/questions/246287/regarding-the-output-format-for-semantic-segmentation
+        # Either: last activation sigmoid +  binary_crossentropy loss
+        # Or: have 2 classes (0s and 1s) converted by "train_V = to_categorical(train_V)" and output of size 2 and as a softmax
+
 
         return model
 
