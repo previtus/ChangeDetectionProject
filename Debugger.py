@@ -119,6 +119,56 @@ class Debugger(object):
         plt.show()
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
+    def viewTrippleFromUrl(self, left_path, right_path, label_path):
+        fig = plt.figure(figsize=(10, 8))
+        from skimage import io
+        IMAGE_RESOLUTION = 112
+
+        def load_vector_image(filename):
+            if filename == None:
+                arr = np.zeros((IMAGE_RESOLUTION, IMAGE_RESOLUTION), dtype=float)
+                return arr
+            img = io.imread(filename)
+            arr = np.asarray(img)
+            thr = 0
+            arr[arr > thr] = 1
+            arr[arr <= thr] = 0
+            return arr
+
+        def load_raster_image(filename):
+            img = io.imread(filename)
+            arr = np.asarray(img)
+            return arr
+
+        left = load_raster_image(left_path)
+        fig.add_subplot(1, 3, 1)
+        if left.shape[2] > 3:
+            plt.imshow(left[:, :, 1:4])
+        else:
+            plt.imshow(left)
+        text = "Left shape " + str(left.shape) + "\n" + self.dynamicRangeInImage(left)[0:-2]
+        fig.gca().set(xlabel=text, xticks=[], yticks=[])
+
+        right = load_raster_image(right_path)
+        fig.add_subplot(1, 3, 2)
+        if right.shape[2] > 3:
+            plt.imshow(right[:, :, 1:4])
+        else:
+            plt.imshow(right)
+
+        text = "Right shape " + str(right.shape) + "\n" + self.dynamicRangeInImage(right)[0:-2]
+        fig.gca().set(xlabel=text, xticks=[], yticks=[])
+
+        label = load_vector_image(label_path)
+        fig.add_subplot(1, 3, 3)
+        plt.imshow(label)  # , cmap='gray')
+
+        text = ""
+        text += "Label shape " + str(label.shape) + "\n" + self.dynamicRangeInImage(label)
+        fig.gca().set(xlabel=text, xticks=[], yticks=[])
+
+        plt.show()
+        # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
     def viewTripples(self, lefts, rights, labels, txts=[], how_many=3, off=0):
         #for i in range(len(lefts)):

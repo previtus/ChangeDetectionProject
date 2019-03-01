@@ -29,6 +29,11 @@ class DatasetInstance_ONERA(object):
         self.dataLoader = dataLoader
         self.variant = 0
 
+        # 383 images => 250 train, 50 val, 83 test
+        self.split_train = 300
+        self.split_val = 330
+        self.CHANNEL_NUMBER = 3
+
         self.save_path_ = "ONERA_preloadedImgs_sub"
 
     def get_paths(self):
@@ -243,3 +248,27 @@ class DatasetInstance_ONERA(object):
         data = [lefts, rights, labels]
         paths = [train_x_left_paths, train_x_right_paths, train_y_label_paths]
         return data, paths
+
+
+    def split_train_val_test(self, data):
+        lefts, rights, labels = data
+
+        # split [0 : split_train] [split_train : split_val] [split_val : end]
+
+        train_L = lefts[0:self.split_train]
+        train_R = rights[0:self.split_train]
+        train_V = labels[0:self.split_train]
+
+        val_L = lefts[self.split_train:self.split_val]
+        val_R = rights[self.split_train:self.split_val]
+        val_V = labels[self.split_train:self.split_val]
+
+        test_L = lefts[self.split_val:]
+        test_R = rights[self.split_val:]
+        test_V = labels[self.split_val:]
+
+        train = [train_L, train_R, train_V]
+        val = [val_L, val_R, val_V]
+        test = [test_L, test_R, test_V]
+
+        return train, val, test

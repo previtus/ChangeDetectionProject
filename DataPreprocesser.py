@@ -7,7 +7,7 @@ class DataPreprocesser(object):
     """
 
 
-    def __init__(self, settings):
+    def __init__(self, settings, datasetInstance):
         self.settings = settings
 
         # storing information on how to normalize the data
@@ -16,6 +16,8 @@ class DataPreprocesser(object):
 
         self.zeroweighting_R_means_per_channel = []
         self.zeroweighting_R_stds_per_channel = []
+
+        self.datasetInstance = datasetInstance
 
     # to do:
     # channel wise normalization
@@ -37,7 +39,9 @@ class DataPreprocesser(object):
         # insp. https://sebastianraschka.com/Articles/2014_about_feature_scaling.html
         # standartized = (x_np - x_np.mean()) / x_np.std()
 
-        for channel in range(4):
+        number_of_channels = self.datasetInstance.CHANNEL_NUMBER
+
+        for channel in range(number_of_channels):
             l = lefts[:, :, :, channel].flatten()
             l_mean = np.mean(l)
             l_std = np.std(l)
@@ -81,7 +85,13 @@ class DataPreprocesser(object):
     def postprocess_images(self, images_L, images_R):
         # from normalized, zero weighted back to the original values
 
-        range_for_just_channels_saved = [1,2,3]
+        number_of_channels = self.datasetInstance.CHANNEL_NUMBER
+
+        if number_of_channels == 4:
+            range_for_just_channels_saved = [1, 2, 3]
+        else:
+            range_for_just_channels_saved = [0, 1, 2]
+
         range_for_just_channels_on_images = [0,1,2] # we cut of one channel before
 
         for channel_i in range(len(range_for_just_channels_saved)):
@@ -107,9 +117,13 @@ class DataPreprocesser(object):
     # Ye Olde(r) ways
     def process_dataset_OLDSIMPLE(self, dataset):
         lefts, rights, labels = dataset
+        # from 0-255 : into -0.5 - 0.5
+        #lefts = (lefts / 255.0) - 0.5
+        #rights = (rights / 255.0) - 0.5
+
         # from 0-255 : into 0.0 - 1.0
-        lefts = (lefts / 255.0) - 0.5
-        rights = (rights / 255.0) - 0.5
+        lefts = (lefts / 255.0)
+        rights = (rights / 255.0)
 
         # keep at 0-1 for the sigmoid
         #labels = labels - 0.5
@@ -123,6 +137,10 @@ class DataPreprocesser(object):
 
         #labels = (labels + 0.5)
         #labels = labels * 2.0
+
+        threshold = 0.5
+        #labels[labels >= threshold] = 1
+        #labels[labels < threshold] = 0
 
         return labels
 

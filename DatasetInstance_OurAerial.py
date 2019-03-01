@@ -43,6 +43,7 @@ class DatasetInstance_OurAerial(object):
             #self.SUBSET = 83000
             self.SUBSET = -1
             self.IMAGE_RESOLUTION = 256
+            self.CHANNEL_NUMBER = 4
             self.LOAD_BATCH_INCREMENT = 10000 # loads in this big batches for each balancing
 
             self.bigger_than_percent = 8.0  # 8.0 from full set
@@ -68,6 +69,7 @@ class DatasetInstance_OurAerial(object):
 
 
             self.IMAGE_RESOLUTION = 112
+            self.CHANNEL_NUMBER = 4
 
             self.bigger_than_percent = 18.0  # 18.0
             self.smaller_than_percent = 1.0  # 5.0
@@ -106,12 +108,6 @@ class DatasetInstance_OurAerial(object):
         test = [test_L, test_R, test_V]
 
         return train, val, test
-
-    def get_paths(self):
-        lefts_paths = []
-        rights_paths = []
-        labels_paths = []
-        return lefts_paths, rights_paths, labels_paths
 
     #def datasetSpecificEdit_rasters(self,data):
     #    return data
@@ -650,9 +646,6 @@ class DatasetInstance_OurAerial(object):
         # build new one mixing two IDX arrays
         print("Mixing from", len(idx_examples_bigger), "bigger and", len(idx_examples_smaller), "smaller.")
 
-        new_lefts = []
-        new_rights = []
-        new_labels = []
         new_lefts_paths = []
         new_rights_paths = []
         new_labels_paths = []
@@ -691,3 +684,33 @@ class DatasetInstance_OurAerial(object):
             new_labels_paths.append(labels_paths[idx_bigger])
 
         return new_lefts_paths, new_rights_paths, new_labels_paths
+
+    def mask_label_into_class_label(self, mask_labels):
+        """
+        Converts the mask label images (for example 224x224 pixel image with 0s and 1s) into a single class label
+        ("change" or "no change") using the same threshold as when balancing the data.
+        PS: we could use different threshold here ...
+        Slight problem is that we won't be exactly sure that the "change" is really "change" and not just noisy
+        mask label (to do: clean label data)
+
+        :param mask_labels:
+        :return:
+        """
+        array_of_number_of_change_pixels = []
+
+        for mask in tqdm(mask_labels):
+            number_of_ones = np.count_nonzero(mask.flatten()) # << loading takes care of this 0 vs non-zero
+            array_of_number_of_change_pixels.append(number_of_ones)
+
+        self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING")
+        array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING")
+
+        array_of_number_of_change_pixels = array_of_number_of_change_pixels / (
+                    self.IMAGE_RESOLUTION * self.IMAGE_RESOLUTION) * 100.0  # percentage of image changed
+
+        class_labels = []
+        for value in array_of_number_of_change_pixels:
+            is_change = value > self.bigger_than_percent
+            class_labels.append(int(is_change))
+
+        return class_labels

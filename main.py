@@ -1,4 +1,4 @@
-import DataLoader, DataPreprocesser, Dataset, Debugger, Settings, ModelHandler
+import DataLoader, DataPreprocesser, Dataset, Debugger, Settings, ModelHandler, Evaluator
 from timeit import default_timer as timer
 from datetime import *
 
@@ -15,25 +15,33 @@ def main(args):
 
     settings = Settings.Settings(args)
     dataset = Dataset.Dataset(settings)
+    evaluator = Evaluator.Evaluator(settings)
+
     #dataset.dataset
     model = ModelHandler.ModelHandler(settings, dataset)
 
     #model.model.train()
-    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_sigmoid_50ep.h5")
-    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_softmax_50ep.h5")
 
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_300ep_overfit.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_300ep_overfit.h5")
+
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_DataAug.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_DataAug.h5") # 100 epochs, on normalized L/R images + data augmentation
+
+    # softmax
     #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_.h5")
-    model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full112dataset_.h5") # 100 epochs, on normalized L/R images
 
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset_.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset_.h5") # 100 epochs, on normalized L/R images
 
-    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset_backwards20.h5")
-
-    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset.h5")
-    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1_full256dataset.h5")
-
-    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights.h5")
+    # sigmoid
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights_Take2.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights_Take2.h5")
     #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")
-    model.model.test()
+
+    #model.model.test(evaluator)
+    #model.model.test_show_on_train_data_to_see_overfit(evaluator)
 
 if __name__ == '__main__':
     args = parser.parse_args()

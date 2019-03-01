@@ -24,14 +24,15 @@ class Model1_SkipSiamFCN(object):
         self.dataPreprocesser = dataset.dataPreprocesser
         self.debugger = Debugger.Debugger(settings)
 
-        self.use_sigmoid_or_softmax = 'softmax' # softmax is for multiple categories
+        self.use_sigmoid_or_softmax = 'sigmoid' # softmax is for multiple categories
 
         self.model = self.create_model(input_size = None, channels = 3)
         self.model.summary()
 
-        self.local_setting_batch_size = 32
-        self.local_setting_epochs = 100
+        self.local_setting_batch_size = 32 #32
+        self.local_setting_epochs = 30 #100
 
+        self.train_data_augmentation = False
 
 
     def train(self):
@@ -64,18 +65,115 @@ class Model1_SkipSiamFCN(object):
             train_V = to_categorical(train_V)
             val_V = to_categorical(val_V)
 
-        history = self.model.fit([train_L, train_R], train_V, batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
-                                 validation_data=([val_L, val_R], val_V))
-        print(history.history)
-        if self.use_sigmoid_or_softmax == 'sigmoid':
-            history.history["acc"] = history.history["binary_accuracy"]
-            history.history["val_acc"] = history.history["val_binary_accuracy"]
+        # Manual inspections, some labels are "weird"
+        """
+        # 1639 1909
+        inspect_i = 1639
+        left_path = self.dataset.train_paths[0][inspect_i].split("/")[-1]
+        right_path = self.dataset.train_paths[1][inspect_i].split("/")[-1]
+        vec_path = self.dataset.train_paths[2][inspect_i].split("/")[-1]
+        txts = ["\n\n\n" + left_path + " | " + right_path  + " | " + vec_path]
+        self.debugger.viewTripples([train_L[inspect_i]], [train_R[inspect_i]], [train_V[inspect_i, :, :, 0]],txts=txts,how_many=1, off=0)
+        # doublecheck
+        self.debugger.viewTrippleFromUrl(self.dataset.train_paths[0][inspect_i], self.dataset.train_paths[1][inspect_i], self.dataset.train_paths[2][inspect_i])
+        """
+
+        if self.train_data_augmentation:
+            # Training with data augmentation:
+            from keras.preprocessing.image import ImageDataGenerator
+            data_gen_args = dict(#featurewise_center=True,
+                                 #featurewise_std_normalization=True,
+                                 #rotation_range=90,
+                                 #width_shift_range=0.1,
+                                 #height_shift_range=0.1,
+                                 #zoom_range=0.2,
+
+                                 horizontal_flip=True,
+                                 vertical_flip=True
+                                 )
+            datagen_L = ImageDataGenerator(**data_gen_args)
+            datagen_R = ImageDataGenerator(**data_gen_args)
+            datagen_V = ImageDataGenerator(**data_gen_args)
+
+            sync_labels = range(len(train_L))
+
+            # compute quantities required for featurewise normalization
+            # (std, mean, and principal components if ZCA whitening is applied)
+            #datagen_L.fit(train_L)
+            seed = 1
+            datagen_L.fit(train_L, augment=True, seed=seed)
+            datagen_R.fit(train_R, augment=True, seed=seed)
+            datagen_V.fit(train_V, augment=True, seed=seed)
+
+            class History(object):
+                history = {}
+
+            history = History()
+            history.history = {}
+            history.history["loss"] = []
+            history.history["acc"] = []
+            history.history["val_loss"] = []
+            history.history["val_acc"] = []
+
+
+            for e in range(self.local_setting_epochs):
+                print('Epoch', e)
+                batches = 0
+
+                datagen_L_generator = datagen_L.flow(train_L, sync_labels, batch_size=self.local_setting_batch_size, seed=seed)
+                datagen_R_generator = datagen_R.flow(train_R, sync_labels, batch_size=self.local_setting_batch_size, seed=seed)
+                datagen_V_generator = datagen_V.flow(train_V, sync_labels, batch_size=self.local_setting_batch_size, seed=seed)
+
+                for l_batch, l_idx_batch in datagen_L_generator:
+                    r_batch, r_idx_batch = next(datagen_R_generator)
+                    v_batch, v_idx_batch = next(datagen_V_generator)
+
+                    if self.settings.verbose >= 3:
+                        print("--- another batch ---")
+                        print(l_idx_batch, l_batch.shape)
+                        print(r_idx_batch, r_batch.shape)
+                        print(v_idx_batch, v_batch.shape)
+
+                        self.debugger.viewTripples(l_batch, r_batch, v_batch[:,:,:,0], how_many=4, off=0)
+                        self.debugger.viewTripples(train_L[l_idx_batch], train_R[r_idx_batch], train_V[v_idx_batch][:,:,:,0], how_many=4, off=0)
+
+                    h = self.model.fit([l_batch, r_batch], v_batch, verbose=0)
+
+                    #self.model.fit(x_batch, y_batch)
+                    batches += 1
+                    if batches >= len(train_L) / 32:
+                        # we need to break the loop by hand because
+                        # the generator loops indefinitely
+                        break
+
+                # add validation measurement to histories?
+                metrics = self.model.evaluate(x=[val_L, val_R], y=val_V, verbose=0)
+                print("val",list(zip(self.model.metrics_names, metrics)))
+                history.history["val_loss"].append(metrics[0]) # 'loss', 'binary_accuracy', 'mean_squared_error'
+                history.history["val_acc"].append(metrics[1])
+
+                # we can evaluate on the original training data - right now it's without the augments (hmmm ... maybe I should keep them and then eval on them instead?)
+                metrics_train = self.model.evaluate(x=[train_L, train_R], y=train_V, verbose=0)
+                print("train",list(zip(self.model.metrics_names, metrics_train)))
+                history.history["loss"].append(metrics_train[0])
+                history.history["acc"].append(metrics_train[1])
+
         else:
-            history.history["acc"] = history.history["categorical_accuracy"]
-            history.history["val_acc"] = history.history["val_categorical_accuracy"]
-        print(history.history)
+            # Regular training:
+            history = self.model.fit([train_L, train_R], train_V, batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
+                                     validation_data=([val_L, val_R], val_V))
+            print(history.history)
+            if self.use_sigmoid_or_softmax == 'sigmoid':
+                history.history["acc"] = history.history["binary_accuracy"]
+                history.history["val_acc"] = history.history["val_binary_accuracy"]
+            else:
+                history.history["acc"] = history.history["categorical_accuracy"]
+                history.history["val_acc"] = history.history["val_categorical_accuracy"]
+            print(history.history)
+
 
         self.debugger.nice_plot_history(history)
+
 
     def save(self, path=""):
         if path == "":
@@ -91,7 +189,7 @@ class Model1_SkipSiamFCN(object):
             self.model.load_weights(path)
         print("Loaded model weights.")
 
-    def test(self):
+    def test(self, evaluator):
         print("Test")
 
         test_L, test_R, test_V = self.dataset.test
@@ -101,9 +199,15 @@ class Model1_SkipSiamFCN(object):
             test_L = test_L[:,:,:,1:4]
             test_R = test_R[:,:,:,1:4]
         # label also reshape
-        test_V = test_V.reshape(test_V.shape + (1,))
+        if self.use_sigmoid_or_softmax == 'softmax':
+            test_V_cat = to_categorical(test_V)
+        else:
+            test_V_cat = test_V.reshape(test_V.shape + (1,))
 
         predicted = self.model.predict([test_L, test_R])
+        metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0)
+        metrics_info = self.model.metrics_names
+        print(list(zip(metrics_info, metrics)))
 
         if self.use_sigmoid_or_softmax == 'softmax':
             #print("Predicted is now in this shape:")
@@ -117,14 +221,24 @@ class Model1_SkipSiamFCN(object):
             # else:
             #predicted = np.argmax(predicted, axis=3)
             #print("predicted.shape:", predicted.shape)
+
         else:
             # chop off that last dimension
             predicted = predicted.reshape(predicted.shape[:-1])
 
-        test_V = test_V.reshape(test_V.shape[:-1])
-
         # undo preprocessing steps?
         predicted = self.dataPreprocesser.postprocess_labels(predicted)
+
+        # Evaluator
+        #evaluator.histogram_of_predictions(predicted)
+        print("threshold=0.5")
+        evaluator.calculate_metrics(predicted, test_V)
+        print("threshold=0.1")
+        evaluator.calculate_metrics(predicted, test_V, threshold=0.1)
+        print("threshold=0.05")
+        evaluator.calculate_metrics(predicted, test_V, threshold=0.05)
+        print("threshold=0.01")
+        evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
 
         test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
 
@@ -143,6 +257,52 @@ class Model1_SkipSiamFCN(object):
         self.debugger.explore_set_stats(test_V)
         print("predicted images (test)")
         self.debugger.explore_set_stats(predicted)
+
+        off = 0
+        while off < len(predicted):
+            #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
+            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=4, off=off)
+            off += 4
+
+
+    def test_show_on_train_data_to_see_overfit(self, evaluator):
+        print("Debug, showing performance on Train data!")
+
+        test_L, test_R, test_V = self.dataset.train
+
+        test_L = test_L[0:200]
+        test_R = test_R[0:200]
+        test_V = test_V[0:200]
+
+        if test_L.shape[3] > 3:
+            test_L = test_L[:,:,:,1:4]
+            test_R = test_R[:,:,:,1:4]
+        if self.use_sigmoid_or_softmax == 'softmax':
+            test_V_cat = to_categorical(test_V)
+        else:
+            test_V_cat = test_V.reshape(test_V.shape + (1,))
+
+        predicted = self.model.predict([test_L, test_R])
+        metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0)
+        metrics_info = self.model.metrics_names
+        print(list(zip(metrics_info, metrics)))
+
+        if self.use_sigmoid_or_softmax == 'softmax':
+            predicted = predicted[:, :, :, 1]
+        else:
+            predicted = predicted.reshape(predicted.shape[:-1])
+
+        predicted = self.dataPreprocesser.postprocess_labels(predicted)
+        # Evaluator
+        #evaluator.histogram_of_predictions(predicted)
+        evaluator.calculate_metrics(predicted, test_V)
+
+        test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
+
+        if test_L.shape[3] > 3:
+            # 3 channels only - rgb
+            test_L = test_L[:,:,:,1:4]
+            test_R = test_R[:,:,:,1:4]
 
         off = 0
         while off < len(predicted):
