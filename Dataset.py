@@ -11,7 +11,7 @@ class Dataset(object):
         self.dataLoader = DataLoader.DataLoader(settings)
         self.debugger = Debugger.Debugger(settings)
 
-        dataset_variant = 112
+        dataset_variant = 256
         self.datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, self.dataLoader, dataset_variant)
         #self.datasetInstance = DatasetInstance_ONERA.DatasetInstance_ONERA(settings, self)
 

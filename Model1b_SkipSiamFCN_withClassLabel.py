@@ -12,7 +12,7 @@ from keras.optimizers import Adam
 from keras.utils import to_categorical
 import numpy as np
 
-class Model1_SkipSiamFCN(object):
+class Model1b_SkipSiamFCN_withClassLabel(object):
     """
     An intermediate between the code and bunch of tester models.
     """
@@ -25,11 +25,13 @@ class Model1_SkipSiamFCN(object):
 
         self.use_sigmoid_or_softmax = 'sigmoid' # softmax is for multiple categories
 
-        self.model = self.create_model(input_size = None, channels = 3)
+        resolution_of_input = self.dataset.datasetInstance.variant
+
+        self.model = self.create_model(input_size = resolution_of_input, channels = 3)
         self.model.summary()
 
         self.local_setting_batch_size = 32 #32
-        self.local_setting_epochs = 30 #100
+        self.local_setting_epochs = 10 #100
 
         self.train_data_augmentation = False
 
@@ -40,6 +42,8 @@ class Model1_SkipSiamFCN(object):
         train_L, train_R, train_V = self.dataset.train
         val_L, val_R, val_V = self.dataset.val
 
+        train_class_Y = self.dataset.train_classlabels
+        val_class_Y = self.dataset.val_classlabels
 
         # 3 channels only - rgb
         if train_L.shape[3] > 3:
@@ -77,102 +81,54 @@ class Model1_SkipSiamFCN(object):
         self.debugger.viewTrippleFromUrl(self.dataset.train_paths[0][inspect_i], self.dataset.train_paths[1][inspect_i], self.dataset.train_paths[2][inspect_i])
         """
 
+        added_plots = []
+
         if self.train_data_augmentation:
-            # Training with data augmentation:
-            from keras.preprocessing.image import ImageDataGenerator
-            data_gen_args = dict(#featurewise_center=True,
-                                 #featurewise_std_normalization=True,
-                                 #rotation_range=90,
-                                 #width_shift_range=0.1,
-                                 #height_shift_range=0.1,
-                                 #zoom_range=0.2,
-
-                                 horizontal_flip=True,
-                                 vertical_flip=True
-                                 )
-            datagen_L = ImageDataGenerator(**data_gen_args)
-            datagen_R = ImageDataGenerator(**data_gen_args)
-            datagen_V = ImageDataGenerator(**data_gen_args)
-
-            sync_labels = range(len(train_L))
-
-            # compute quantities required for featurewise normalization
-            # (std, mean, and principal components if ZCA whitening is applied)
-            #datagen_L.fit(train_L)
-            seed = 1
-            datagen_L.fit(train_L, augment=True, seed=seed)
-            datagen_R.fit(train_R, augment=True, seed=seed)
-            datagen_V.fit(train_V, augment=True, seed=seed)
-
-            class History(object):
-                history = {}
-
-            history = History()
-            history.history = {}
-            history.history["loss"] = []
-            history.history["acc"] = []
-            history.history["val_loss"] = []
-            history.history["val_acc"] = []
-
-
-            for e in range(self.local_setting_epochs):
-                print('Epoch', e)
-                batches = 0
-
-                datagen_L_generator = datagen_L.flow(train_L, sync_labels, batch_size=self.local_setting_batch_size, seed=seed)
-                datagen_R_generator = datagen_R.flow(train_R, sync_labels, batch_size=self.local_setting_batch_size, seed=seed)
-                datagen_V_generator = datagen_V.flow(train_V, sync_labels, batch_size=self.local_setting_batch_size, seed=seed)
-
-                for l_batch, l_idx_batch in datagen_L_generator:
-                    r_batch, r_idx_batch = next(datagen_R_generator)
-                    v_batch, v_idx_batch = next(datagen_V_generator)
-
-                    if self.settings.verbose >= 3:
-                        print("--- another batch ---")
-                        print(l_idx_batch, l_batch.shape)
-                        print(r_idx_batch, r_batch.shape)
-                        print(v_idx_batch, v_batch.shape)
-
-                        self.debugger.viewTripples(l_batch, r_batch, v_batch[:,:,:,0], how_many=4, off=0)
-                        self.debugger.viewTripples(train_L[l_idx_batch], train_R[r_idx_batch], train_V[v_idx_batch][:,:,:,0], how_many=4, off=0)
-
-                    h = self.model.fit([l_batch, r_batch], v_batch, verbose=0)
-
-                    #self.model.fit(x_batch, y_batch)
-                    batches += 1
-                    if batches >= len(train_L) / 32:
-                        # we need to break the loop by hand because
-                        # the generator loops indefinitely
-                        break
-
-                # add validation measurement to histories?
-                metrics = self.model.evaluate(x=[val_L, val_R], y=val_V, verbose=0)
-                print("val",list(zip(self.model.metrics_names, metrics)))
-                history.history["val_loss"].append(metrics[0]) # 'loss', 'binary_accuracy', 'mean_squared_error'
-                history.history["val_acc"].append(metrics[1])
-
-                # we can evaluate on the original training data - right now it's without the augments (hmmm ... maybe I should keep them and then eval on them instead?)
-                metrics_train = self.model.evaluate(x=[train_L, train_R], y=train_V, verbose=0)
-                print("train",list(zip(self.model.metrics_names, metrics_train)))
-                history.history["loss"].append(metrics_train[0])
-                history.history["acc"].append(metrics_train[1])
+            print("FOOO")
 
         else:
+            # change weights of each class?
+            # not sure if this one will work with 2D img as label
+            # class_weight = {0: 1.0, 1: 1.0} #
+            # so maybe
+            # sample_weight: optional array of the same length as x, containing weights to apply to the model's loss for each sample
+            #       give it a rebalancing?
+
+
             # Regular training:
-            history = self.model.fit([train_L, train_R], train_V, batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
-                                     validation_data=([val_L, val_R], val_V))
+            history = self.model.fit([train_L, train_R], [train_V, train_class_Y], batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
+                                     validation_data=([val_L, val_R], [val_V, val_class_Y]), verbose=2) # 2 ~ 1 line each ep
             print(history.history)
             if self.use_sigmoid_or_softmax == 'sigmoid':
-                history.history["acc"] = history.history["binary_accuracy"]
-                history.history["val_acc"] = history.history["val_binary_accuracy"]
+                # {'val_loss': [0.5298519569635392],
+                # 'val_conv2d_11_loss': [0.4634183657169342],
+                # 'val_dense_4_loss': [0.5962855698540807],
+                # 'val_conv2d_11_binary_accuracy': [0.83706791639328],
+                # 'val_conv2d_11_mean_squared_error': [0.14408911854028703],
+                # 'val_dense_4_binary_accuracy': [0.3],
+                # 'val_dense_4_mean_squared_error': [2.1713935780525206],
+
+                # 'loss': [1.8971326723965731],
+                # 'conv2d_11_loss': [0.5563809064301577],
+                # 'dense_4_loss': [3.2378844252499666],
+                #
+                # 'conv2d_11_binary_accuracy': [0.7394221806526184],
+                # 'conv2d_11_mean_squared_error': [0.18496516672047703],
+                # 'dense_4_binary_accuracy': [0.2772727272727273],
+                # 'dense_4_mean_squared_error': [2.65305721282959]}
+                # label and mask_acc
+                history.history["acc"] = history.history["label_binary_accuracy"]  # we care about this one to show
+                history.history["val_acc"] = history.history["val_label_binary_accuracy"]
+                history.history["mask_acc"] = history.history["mask_binary_accuracy"]
+                history.history["val_mask_acc"] = history.history["val_mask_binary_accuracy"]
+                added_plots = ["mask_acc","val_mask_acc"]
             else:
-                history.history["acc"] = history.history["categorical_accuracy"]
-                history.history["val_acc"] = history.history["val_categorical_accuracy"]
+                history.history["acc"] = history.history["label_categorical_accuracy"]
+                history.history["val_acc"] = history.history["val_label_categorical_accuracy"]
             print(history.history)
 
 
-        self.debugger.nice_plot_history(history)
-
+        self.debugger.nice_plot_history(history,added_plots)
 
     def save(self, path=""):
         if path == "":
@@ -192,6 +148,7 @@ class Model1_SkipSiamFCN(object):
         print("Test")
 
         test_L, test_R, test_V = self.dataset.test
+        test_class_Y = self.dataset.test_classlabels
 
         if test_L.shape[3] > 3:
             # 3 channels only - rgb
@@ -203,8 +160,9 @@ class Model1_SkipSiamFCN(object):
         else:
             test_V_cat = test_V.reshape(test_V.shape + (1,))
 
-        predicted = self.model.predict([test_L, test_R])
-        metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0)
+        predicted_masks, predicted_labels = self.model.predict([test_L, test_R])
+        predicted = predicted_masks
+        metrics = self.model.evaluate(x=[test_L, test_R], y=[test_V_cat, test_class_Y], verbose=0)
         metrics_info = self.model.metrics_names
         print(list(zip(metrics_info, metrics)))
 
@@ -224,10 +182,38 @@ class Model1_SkipSiamFCN(object):
         else:
             # chop off that last dimension
             predicted = predicted.reshape(predicted.shape[:-1])
+            predicted_labels = predicted_labels.reshape(predicted_labels.shape[:-1])
 
         # undo preprocessing steps?
         predicted = self.dataPreprocesser.postprocess_labels(predicted)
 
+        print("CLASS EVALUATION")
+        print("this:")
+        print(len(predicted_labels))
+        print(predicted_labels.shape)
+        print("with that:")
+        print(len(test_class_Y))
+        print(test_class_Y.shape)
+
+
+        evaluator.histogram_of_predictions(predicted_labels)
+        evaluator.histogram_of_predictions(test_class_Y)
+
+        print("threshold=0.5")
+        predictions_thresholded = evaluator.calculate_metrics(predicted_labels, test_class_Y)
+        predictions_thresholded = predictions_thresholded[0].astype(int)
+        print("threshold=0.1")
+        predictions_thresholded = evaluator.calculate_metrics(predicted_labels, test_class_Y, threshold=0.1)
+        predictions_thresholded = predictions_thresholded[0].astype(int)
+
+        txts = []
+        for i in range(len(test_class_Y)):
+            pred = predictions_thresholded[i]
+            gt = test_class_Y[i]
+            txt = "gt "+str(gt)+" pred "+str(pred)+"\n"
+            txts.append(txt)
+
+        print("MASK EVALUATION")
         # Evaluator
         #evaluator.histogram_of_predictions(predicted)
         print("threshold=0.5")
@@ -236,8 +222,8 @@ class Model1_SkipSiamFCN(object):
         evaluator.calculate_metrics(predicted, test_V, threshold=0.1)
         print("threshold=0.05")
         evaluator.calculate_metrics(predicted, test_V, threshold=0.05)
-        print("threshold=0.01")
-        evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
+        #print("threshold=0.01")
+        #evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
 
         test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
 
@@ -260,7 +246,7 @@ class Model1_SkipSiamFCN(object):
         off = 0
         while off < len(predicted):
             #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=4, off=off)
+            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, txts, how_many=4, off=off)
             off += 4
 
 
@@ -348,6 +334,11 @@ class Model1_SkipSiamFCN(object):
         # siamese_model = Model(input, out)
         siamese_model_encode = Model(inputs=[input], outputs=[out, skip16, skip32, skip64, skip128])
 
+        # out comes:
+        #         112 #max_pooling2d_4 (MaxPooling2 (None, 7, 7, 128)
+        #         256 #max_pooling2d_4(MaxPooling2(None, 16, 16, 128)
+        #
+
         print("<< Siamese model >>")
         siamese_model_encode.summary()
 
@@ -359,8 +350,8 @@ class Model1_SkipSiamFCN(object):
         branch_b, skip16_b, skip32_b, skip64_b, skip128_b = siamese_model_encode([input_b])
 
         # merge two branches
-        x = keras.layers.concatenate([branch_a, branch_b])
-        x = keras.layers.Conv2DTranspose(128, kernel_size, padding="same")(x)
+        joined_siam_x = keras.layers.concatenate([branch_a, branch_b])
+        x = keras.layers.Conv2DTranspose(128, kernel_size, padding="same")(joined_siam_x)
         x = keras.layers.UpSampling2D(up_size)(x)
 
         # merge 128
@@ -403,10 +394,18 @@ class Model1_SkipSiamFCN(object):
             metric = "binary_accuracy"
             classes_out = 1  # between 0-1 its a real num
 
-        final_out = keras.layers.Conv2D(classes_out, (1, 1), activation=activ)(final_out)
+        final_out = keras.layers.Conv2D(classes_out, (1, 1), activation=activ, name="mask")(final_out)
+
+        classifier = keras.layers.Flatten()(joined_siam_x)
+        classifier = keras.layers.Dense(2048)(classifier)
+        classifier = keras.layers.Dropout(0.5)(classifier)
+        classifier = keras.layers.Dense(256)(classifier)
+        classifier = keras.layers.Dropout(0.5)(classifier)
+        classifier = keras.layers.Dense(32)(classifier)
+        classifier_out = keras.layers.Dense(1, activation="sigmoid", name="label")(classifier)
 
         print("<< Full model >>")
-        full_model = Model([input_a, input_b], final_out)
+        full_model = Model(inputs = [input_a, input_b], outputs=[final_out, classifier_out])
 
         #full_model.summary()
 
@@ -427,7 +426,7 @@ class Model1_SkipSiamFCN(object):
             return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
         """
 
-        model.compile(optimizer=Adam(lr=0.00001), loss=loss, metrics=[metric, 'mse'])
+        model.compile(optimizer=Adam(lr=0.00001), loss=loss, metrics=[metric, 'mse'], loss_weights=[0.5, 0.5])
 
         # output dim depending on the type of a problem: https://stats.stackexchange.com/questions/246287/regarding-the-output-format-for-semantic-segmentation
         # Either: last activation sigmoid +  binary_crossentropy loss

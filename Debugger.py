@@ -214,7 +214,7 @@ class Debugger(object):
         plt.show()
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
-    def viewQuadrupples(self, lefts, rights, labels, predicted, how_many=3, off=0):
+    def viewQuadrupples(self, lefts, rights, labels, predicted, txts=[], how_many=3, off=0):
         rows, columns = how_many, 4
         fig = plt.figure(figsize=(10, 8))
         k = 1
@@ -251,7 +251,10 @@ class Debugger(object):
             fig.add_subplot(rows, columns, k+3)
             #plt.imshow(label, cmap='gray')
             plt.imshow(one_predicted)#, cmap='gray')
-            text = "Predicted shape "+str(one_predicted.shape)+"\n"+self.dynamicRangeInImage(one_predicted)
+            text = ""
+            if len(txts) > 0:
+                text += txts[idx+off]
+            text += "Predicted shape "+str(one_predicted.shape)+"\n"+self.dynamicRangeInImage(one_predicted)
             fig.gca().set(xlabel=text, xticks=[], yticks=[])
             k += 4
 
@@ -266,7 +269,7 @@ class Debugger(object):
 
     ### TRAINING VISUALIZATIONS:
 
-    def nice_plot_history(self, history, no_val=False):
+    def nice_plot_history(self, history, added_plots = [], no_val=False):
         fig, ax = plt.subplots()
 
         loss = history.history["loss"]
@@ -281,6 +284,17 @@ class Debugger(object):
         if not no_val:
             data = [loss, val_loss, accuracy, val_accuracy]
             columns = ['loss', 'val_loss', 'acc', 'val_acc']
+
+        print(data)
+        print(columns)
+
+        if len(added_plots)>0:
+            for item in added_plots:
+                data += [history.history[item]]
+                columns += [item]
+
+        print(data)
+        print(columns)
 
         df = pd.DataFrame(data)
         df = df.transpose()
@@ -314,6 +328,10 @@ class Debugger(object):
         if not no_val:
             losses += plot_item("val_loss", "brown", max_wanted=False)
             max_val = max(df["loss"].max(), df["val_loss"].max())
+
+        if len(added_plots)>0:
+            for item in added_plots:
+                plot_item(item, "grey")
 
         plt.ylim(0, 1)
         plt.ylabel("Accuracy")

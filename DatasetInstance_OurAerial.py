@@ -713,4 +713,4 @@ class DatasetInstance_OurAerial(object):
             is_change = value > self.bigger_than_percent
             class_labels.append(int(is_change))
 
-        return class_labels
+        return np.array(class_labels)

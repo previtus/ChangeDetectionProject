@@ -17,7 +17,7 @@ class Evaluator(object):
     def histogram_of_predictions(self, predictions):
         print("We have", len(predictions), "predictions, each is a", predictions[0].shape, "image.")
 
-        flat_predictions = predictions.flatten()
+        flat_predictions = predictions.flatten() # (works for 2D, nD and simple 1D class labels)
 
         fig = plt.figure()
         bins = 33
@@ -37,11 +37,17 @@ class Evaluator(object):
 
 
     def calculate_metrics(self, predictions, ground_truths, threshold = 0.5):
-        print("We have", len(predictions), "predictions, each is a", predictions[0].shape, "image.", predictions[0][0][0:3])
-        print("We have", len(ground_truths), "ground truths, each is a", ground_truths[0].shape, "image.", ground_truths[0][0][0:3])
 
-        # careful not to edit the label images here
-        predictions_copy = np.array(predictions)
+        flavour_text = ""
+        if len(predictions.shape) > 1:
+            print("We have", len(predictions), "predictions, each is a", predictions[0].shape, "image.", predictions[0][0][0:3])
+            print("We have", len(ground_truths), "ground truths, each is a", ground_truths[0].shape, "image.", ground_truths[0][0][0:3])
+            flavour_text = "pixels"
+            # careful not to edit the label images here
+            predictions_copy = np.array(predictions)
+        else:
+            flavour_text = "labels"
+            predictions_copy = np.array([predictions])
 
         # 1 threshold the data per each pixel
 
@@ -51,6 +57,10 @@ class Evaluator(object):
             image[image < threshold] = 0
 
         # only "0.0" and "1.0" in the data now
+
+        #if True:
+        #    print("pred:",predictions_copy[0].astype(int))
+        #    print("gt:  ",ground_truths)
 
         # 2 calculate T/F P/N
 
@@ -84,7 +94,7 @@ class Evaluator(object):
         # 3a generate confusion matrix
         # 3b metrics - recall, precision, accuracy
 
-        print("Statistics over", total,"pixels:")
+        print("Statistics over", total,flavour_text,":")
         print("TP", TP, "\t ... correctly classified as a change.")
         print("TN", TN, "\t ... correctly classified as a no-change.")
         print("FP", FP, "\t ... classified as change while it's not.")
@@ -118,3 +128,6 @@ class Evaluator(object):
         print(conf)
 
         print("=====================================================================================")
+
+        predictions_thresholded = predictions_copy
+        return predictions_thresholded
