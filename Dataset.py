@@ -11,7 +11,12 @@ class Dataset(object):
         self.dataLoader = DataLoader.DataLoader(settings)
         self.debugger = Debugger.Debugger(settings)
 
-        dataset_variant = 256
+        # just "_clean" is rubbis!
+        # manual cleanup at 256_clean2 - 256x256 without overlap
+        #dataset_variant = "256"
+        dataset_variant = "256_cleanManual"
+        #dataset_variant = "256"
+        #dataset_variant = "112_clean"
         self.datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, self.dataLoader, dataset_variant)
         #self.datasetInstance = DatasetInstance_ONERA.DatasetInstance_ONERA(settings, self)
 
@@ -35,9 +40,11 @@ class Dataset(object):
         # preprocess the dataset
         self.train, self.val, self.test = self.dataPreprocesser.process_dataset(self.train, self.val, self.test)
 
-        self.train_classlabels = self.datasetInstance.mask_label_into_class_label(self.train[2])
-        self.val_classlabels = self.datasetInstance.mask_label_into_class_label(self.val[2])
-        self.test_classlabels = self.datasetInstance.mask_label_into_class_label(self.test[2])
+        # only if we use model 1b and if we have our data and not onera
+        if True:
+            self.train_classlabels = self.datasetInstance.mask_label_into_class_label(self.train[2])
+            self.val_classlabels = self.datasetInstance.mask_label_into_class_label(self.val[2])
+            self.test_classlabels = self.datasetInstance.mask_label_into_class_label(self.test[2])
 
         #print("Class labels:")
         #print(self.train_classlabels[0:10])

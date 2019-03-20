@@ -40,7 +40,6 @@ class Model1_SkipSiamFCN(object):
         train_L, train_R, train_V = self.dataset.train
         val_L, val_R, val_V = self.dataset.val
 
-
         # 3 channels only - rgb
         if train_L.shape[3] > 3:
             train_L = train_L[:,:,:,1:4]
@@ -237,7 +236,8 @@ class Model1_SkipSiamFCN(object):
         print("threshold=0.05")
         evaluator.calculate_metrics(predicted, test_V, threshold=0.05)
         print("threshold=0.01")
-        evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
+        predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
+        predictions_thresholded = predictions_thresholded[0].astype(int)
 
         test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
 
@@ -435,6 +435,4 @@ class Model1_SkipSiamFCN(object):
 
 
         return model
-
-
 

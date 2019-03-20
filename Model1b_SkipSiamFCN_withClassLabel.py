@@ -2,6 +2,79 @@
 #import os
 #os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
 #os.environ["CUDA_VISIBLE_DEVICES"] = ""
+import math
+import tensorflow as tf
+from keras.backend.common import epsilon
+from keras import backend as K
+def weighted_categorical_crossentropy(weights):
+    # https://forums.fast.ai/t/unbalanced-classes-in-image-segmentation/18289
+    """ weighted_categorical_crossentropy
+
+        Args:
+            * weights<ktensor|nparray|list>: crossentropy weights
+        Returns:
+            * weighted categorical crossentropy function
+    """
+    if isinstance(weights,list) or isinstance(np.ndarray):
+        weights=K.variable(weights)
+
+    def loss(target,output,from_logits=False):
+        if not from_logits:
+            output /= tf.reduce_sum(output,
+                                    len(output.get_shape()) - 1,
+                                    True)
+            _epsilon = tf.convert_to_tensor(K.epsilon(), dtype=output.dtype.base_dtype)
+            output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
+            losses = target * tf.log(output)
+            print(losses)
+            weighted_losses = target * tf.log(output) * weights
+            print(weighted_losses)
+            return - tf.reduce_sum(weighted_losses,len(output.get_shape()) - 1)
+        else:
+            raise ValueError('WeightedCategoricalCrossentropy: not valid with logits')
+    return loss
+
+def ORIGINAL_categorical_crossentropy(target, output, from_logits=False, axis=-1):
+    """Categorical crossentropy between an output tensor and a target tensor.
+    # Arguments
+        target: A tensor of the same shape as `output`.
+        output: A tensor resulting from a softmax
+            (unless `from_logits` is True, in which
+            case `output` is expected to be the logits).
+        from_logits: Boolean, whether `output` is the
+            result of a softmax, or is a tensor of logits.
+        axis: Int specifying the channels axis. `axis=-1`
+            corresponds to data format `channels_last`,
+            and `axis=1` corresponds to data format
+            `channels_first`.
+    # Returns
+        Output tensor.
+    # Raises
+        ValueError: if `axis` is neither -1 nor one of
+            the axes of `output`.
+    """
+    output_dimensions = list(range(len(output.get_shape())))
+    if axis != -1 and axis not in output_dimensions:
+        raise ValueError(
+            '{}{}{}'.format(
+                'Unexpected channels axis {}. '.format(axis),
+                'Expected to be -1 or one of the axes of `output`, ',
+                'which has {} dimensions.'.format(len(output.get_shape()))))
+    # Note: tf.nn.softmax_cross_entropy_with_logits
+    # expects logits, Keras expects probabilities.
+    if not from_logits:
+        # scale preds so that the class probas of each sample sum to 1
+        output /= tf.reduce_sum(output, axis, True)
+        # manual computation of crossentropy
+        _epsilon = tf.convert_to_tensor(epsilon(), dtype=output.dtype.base_dtype)
+        output = tf.clip_by_value(output, _epsilon, 1. - _epsilon)
+        losses = target * tf.log(output)
+        #weighted_losses = target * tf.log(output) * weights
+        return - tf.reduce_sum(losses, axis)
+    else:
+        return tf.nn.softmax_cross_entropy_with_logits(labels=target,
+                                                       logits=output)
+
 
 import Debugger, DataPreprocesser
 import keras
@@ -24,14 +97,15 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
         self.debugger = Debugger.Debugger(settings)
 
         self.use_sigmoid_or_softmax = 'sigmoid' # softmax is for multiple categories
+        self.use_sigmoid_or_softmax = 'softmax' # softmax is for multiple categories
 
-        resolution_of_input = self.dataset.datasetInstance.variant
+        resolution_of_input = self.dataset.datasetInstance.IMAGE_RESOLUTION
 
         self.model = self.create_model(input_size = resolution_of_input, channels = 3)
         self.model.summary()
 
         self.local_setting_batch_size = 32 #32
-        self.local_setting_epochs = 10 #100
+        self.local_setting_epochs = 30 #30 #100
 
         self.train_data_augmentation = False
 
@@ -123,8 +197,15 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
                 history.history["val_mask_acc"] = history.history["val_mask_binary_accuracy"]
                 added_plots = ["mask_acc","val_mask_acc"]
             else:
-                history.history["acc"] = history.history["label_categorical_accuracy"]
+
+                history.history["acc"] = history.history["label_categorical_accuracy"]  # we care about this one to show
                 history.history["val_acc"] = history.history["val_label_categorical_accuracy"]
+                history.history["mask_acc"] = history.history["mask_categorical_accuracy"]
+                history.history["val_mask_acc"] = history.history["val_mask_categorical_accuracy"]
+                added_plots = ["mask_acc","val_mask_acc"]
+
+                #history.history["acc"] = history.history["label_categorical_accuracy"]
+                #history.history["val_acc"] = history.history["val_label_categorical_accuracy"]
             print(history.history)
 
 
@@ -174,6 +255,7 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
 
             # with just 2 classes I can hax:
             predicted = predicted[:, :, :, 1]
+            predicted_labels = predicted_labels.reshape(predicted_labels.shape[:-1])
 
             # else:
             #predicted = np.argmax(predicted, axis=3)
@@ -196,32 +278,41 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
         print(test_class_Y.shape)
 
 
-        evaluator.histogram_of_predictions(predicted_labels)
-        evaluator.histogram_of_predictions(test_class_Y)
+        #evaluator.histogram_of_predictions(predicted_labels)
+        #evaluator.histogram_of_predictions(test_class_Y)
 
-        print("threshold=0.5")
-        predictions_thresholded = evaluator.calculate_metrics(predicted_labels, test_class_Y)
+        #print("trying thresholds ...")
+        #evaluator.try_all_thresholds(predicted_labels, test_class_Y, np.arange(0.0,1.0,0.01), title_txt="Labels (0/1) evaluated [Change Class]") #NoChange
+
+
+        print("threshold=0.02")
+        predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted_labels, test_class_Y, threshold=0.02)
         predictions_thresholded = predictions_thresholded[0].astype(int)
-        print("threshold=0.1")
-        predictions_thresholded = evaluator.calculate_metrics(predicted_labels, test_class_Y, threshold=0.1)
-        predictions_thresholded = predictions_thresholded[0].astype(int)
+        #print("threshold=0.1")
+        #predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted_labels, test_class_Y, threshold=0.1)
+        #predictions_thresholded = predictions_thresholded[0].astype(int)
 
         txts = []
+        """
         for i in range(len(test_class_Y)):
             pred = predictions_thresholded[i]
             gt = test_class_Y[i]
             txt = "gt "+str(gt)+" pred "+str(pred)+"\n"
             txts.append(txt)
+        """
 
         print("MASK EVALUATION")
+        print("trying thresholds ...")
+        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.01), title_txt="Masks (all pixels 0/1) evaluated [Change Class]")
+
         # Evaluator
         #evaluator.histogram_of_predictions(predicted)
-        print("threshold=0.5")
-        evaluator.calculate_metrics(predicted, test_V)
-        print("threshold=0.1")
-        evaluator.calculate_metrics(predicted, test_V, threshold=0.1)
-        print("threshold=0.05")
-        evaluator.calculate_metrics(predicted, test_V, threshold=0.05)
+        #print("threshold=0.5")
+        #evaluator.calculate_metrics(predicted, test_V)
+        #print("threshold=0.1")
+        #evaluator.calculate_metrics(predicted, test_V, threshold=0.1)
+        print("threshold=0.02")
+        evaluator.calculate_metrics(predicted, test_V, threshold=0.02)
         #print("threshold=0.01")
         #evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
 
@@ -385,7 +476,44 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
         if self.use_sigmoid_or_softmax == 'softmax':
             activ = "softmax"
             loss = "categorical_crossentropy"
+            # class 0 = no change
+            # class 1 = change
+            #weights = ...
+            # [1, 100] caused everything being marked as change
+            # [100, 1] on the contrary keeps everything as no change
+
+            # in a sample test set we had:
+            #
+            #    no change       1.00      0.00      0.01   8985009
+            #       change       0.05      1.00      0.09    452175
+
+            print("using our own weighted_categorical_crossentropy")
+
             metric = "categorical_accuracy"
+            C = 1
+
+            w_class0 = math.log(((8985009+452175) / 8985009)) # (total_for_all_categories/total_for_category)
+            w_class1 = math.log(((8985009+452175) / 452175))
+
+            """
+            w_class0 = (8985009 / (8985009+452175)) # proportion of the data
+            w_class0 = math.log(1 + C * w_class0)
+            #w_class0 = max(w_class0, 1)
+            
+            w_class1 = (452175 / (8985009+452175)) # proportion of the data
+            w_class1 = math.log(1 + C * w_class1)
+            #w_class1 = max(w_class1, 1)
+            """
+
+            weights = [w_class0, w_class1] # inversly to the class distribution
+            ratio = w_class1 / w_class0 # ~ 60 cca ... is too much
+            print("log weights according to data distribution (subset)", weights, "ratio (how much does 1 have weight over 0) is:", ratio)
+
+            weights = [1, 3]
+            ratio = w_class1 / w_class0
+            print("log weights according to data distribution (subset)", weights, "ratio (how much does 1 have weight over 0) is:", ratio)
+
+            loss = weighted_categorical_crossentropy(weights)
 
             classes_out = 2 #now at least, only 0 or 1
         else:

@@ -22,7 +22,24 @@ def main(args):
 
     model.model.train()
 
-    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_full256dataset_.h5")
+    # clean 2 - manual cleaning, only 256x256 with 32px overlap ("256_cleanManual")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1.h5") # is 1 to 100
+    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1_1to3w.h5")#1 to 3
+
+
+
+    # clean 1 - keeping in only polygons with area 40 and bigger
+    # Re-Check paths here!
+
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_clean256dataset_.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_clean256dataset_.h5")
+
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_clean112dataset_.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_clean112dataset_.h5")
+
+
+    # first "unclean" dataset
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_full256dataset_.h5")
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_full256dataset_.h5")
 
     #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_full112dataset_.h5")

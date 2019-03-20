@@ -130,9 +130,20 @@ class Debugger(object):
                 return arr
             img = io.imread(filename)
             arr = np.asarray(img)
-            thr = 0
-            arr[arr > thr] = 1
-            arr[arr <= thr] = 0
+
+            print("occurances before thr:",self.occurancesInImage(arr))
+
+            ## FOR NEWER DATASETS
+            arr[arr == 0] = 0
+            arr[arr == 65535] = 0
+            arr[arr != 0] = 1
+
+            print("occurances after thr:",self.occurancesInImage(arr))
+
+            ## FOR OLDER DATASETS
+            #thr = 0
+            #arr[arr > thr] = 1
+            #arr[arr <= thr] = 0
             return arr
 
         def load_raster_image(filename):

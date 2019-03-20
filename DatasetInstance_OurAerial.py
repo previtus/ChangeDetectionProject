@@ -26,7 +26,7 @@ class DatasetInstance_OurAerial(object):
     """
 
 
-    def __init__(self, settings, dataLoader, variant = 256):
+    def __init__(self, settings, dataLoader, variant = "256"):
         self.settings = settings
         self.dataLoader = dataLoader
         self.debugger = Debugger.Debugger(settings)
@@ -38,10 +38,22 @@ class DatasetInstance_OurAerial(object):
 
         self.save_path_ = "OurAerial_preloadedImgs_sub"
 
-        if self.variant == 256:
+        if self.variant == "256" or self.variant == "256_clean" or self.variant == "256_cleanManual_noOver" or self.variant == "256_cleanManual":
             self.dataset_version = "256x256_over32"
+            if self.variant == "256_clean":
+                self.dataset_version = "256x256_over32_clean"
+            if self.variant == "256_cleanManual_noOver": # <<<< currently no data
+                self.dataset_version = "256x256_cleanManual_noOver"
+            if self.variant == "256_cleanManual":
+                self.dataset_version = "256x256_cleanManual"
+                self.local_setting_skip_rows = 2
+                self.local_setting_skip_columns = 2
+
+                # possibly can have a more generous self.bigger_than_percent ... ?
+
             #self.SUBSET = 83000
             self.SUBSET = -1
+            #self.SUBSET = 1000
             self.IMAGE_RESOLUTION = 256
             self.CHANNEL_NUMBER = 4
             self.LOAD_BATCH_INCREMENT = 10000 # loads in this big batches for each balancing
@@ -60,9 +72,28 @@ class DatasetInstance_OurAerial(object):
             self.split_train = 1200
             self.split_val = 1300
 
+            if self.variant == "256_clean":
+                self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL8.0_1.0_sel1086_res256x256.h5"
+                # 1086 in total
+                self.split_train = 900
+                self.split_val = 1000
 
-        elif self.variant == 112:
+            if self.variant == "256_cleanManual":
+                # needs also the source images without overlap!
+                self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5"
+                # 8 perc => 942/2 change images
+                # 3 perc => 2144/2 change images
+                self.bigger_than_percent = 3.0 # try?
+                self.smaller_than_percent = 1.0  # there shouldn't be much noise in this ...
+
+                self.split_train = 1900
+                self.split_val = 2000
+
+
+        elif self.variant == "112" or self.variant == "112_clean":
             self.dataset_version = "112x112"
+            if self.variant == "112_clean":
+                self.dataset_version = "112x112_clean"
             #self.SUBSET = 118667
             self.SUBSET = -1
             self.LOAD_BATCH_INCREMENT = 100000
@@ -78,13 +109,18 @@ class DatasetInstance_OurAerial(object):
             self.default_vector_shape = (112, 112)
 
             # decent dataset:
-            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel254_res112x112.h5"
             self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel2380_res112x112.h5"
 
             # spliting <2380>
             # 2200 train, 100 val, 80 test
             self.split_train = 2200
             self.split_val = 2300
+
+            if self.variant == "112_clean":
+                self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel2212_res112x112.h5"
+                # 2212 in total
+                self.split_train = 2000
+                self.split_val = 2100
 
     def split_train_val_test(self, data):
         lefts, rights, labels = data
@@ -148,6 +184,21 @@ class DatasetInstance_OurAerial(object):
         lefts_paths = lefts_paths[0:self.SUBSET]
         rights_paths = rights_paths[0:self.SUBSET]
         labels_paths = labels_paths[0:self.SUBSET]
+
+        # DEBUG SECTION, check if the images of left-right-label correspond to each other!
+        """
+        for i in range(len(lefts_paths)):
+            if labels_paths[i]:
+                print(i)
+
+                print(lefts_paths[i])
+                print(rights_paths[i])
+                print(labels_paths[i])
+
+                self.debugger.viewTrippleFromUrl(lefts_paths[i], rights_paths[i], labels_paths[i])
+
+                print("--------------/n")
+        """
 
         # check_valid_images() + balance_images()
         # save_valid_and_balanced_paths_to_cache()
@@ -293,18 +344,8 @@ class DatasetInstance_OurAerial(object):
 
     def load_paths_from_folders(self):
 
-        if self.variant == 256:
+        if self.variant == "256" or self.variant == "256_clean" or self.variant == "256_cleanManual":
             # 256x256 version
-
-            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip1/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip2/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip3/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip4/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip5/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip6/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip7/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip8/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip9/"]
 
             paths_2012 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2012_strip1_256x256_over32_png/",
                           "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2012_strip2_256x256_over32_png/",
@@ -329,20 +370,54 @@ class DatasetInstance_OurAerial(object):
             # paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip7/","/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip8/"]
             # paths_2012 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2012_strip7_256x256_over32_png/","/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2012_strip8_256x256_over32_png/"]
             # paths_2015 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2015_strip7_256x256_over32_png/","/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2015_strip8_256x256_over32_png/"]
+        if self.variant == "256":
+            # 256x256 version
+
+            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip1/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip2/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip3/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip4/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip5/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip6/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip7/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip8/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip9/"]
+
+            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip5/"]
+        elif self.variant == "256_clean":
+            # 256x256 version
+
+            start_dir = "/home/pf/pfstaff/projects/ruzicka/dataset_initial_view(secondInst)/03_06_vectorStrips_areaOnlyBiggerThan40/vector_strips_a40p_256x256_32over/"
+            paths_vectors = [   "vector_strip_1_a40p_256_32over/",
+                                "vector_strip_2_a40p_256_32over/",
+                                "vector_strip_3_a40p_256_32over/",
+                                "vector_strip_4_a40p_256_32over/",
+                                "vector_strip_5_a40p_256_32over/",
+                                "vector_strip_6_a40p_256_32over/",
+                                "vector_strip_7_a40p_256_32over/",
+                                "vector_strip_8_a40p_256_32over/",
+                                "vector_strip_9_a40p_256_32over/"]
+            paths_vectors = [start_dir + f for f in paths_vectors]
+
+        elif self.variant == "256_cleanManual":
+            # 256x256 version
+
+            start_dir = "/home/pf/pfstaff/projects/ruzicka/CleanedVectors_manually_256x256_32over/"
+            paths_vectors = [   "vector_strip1_256x256_over32/",
+                                "vector_strip2_256x256_over32/",
+                                "vector_strip3_256x256_over32/",
+                                "vector_strip4_256x256_over32/",
+                                "vector_strip5_256x256_over32/",
+                                "vector_strip6_256x256_over32/",
+                                "vector_strip7_256x256_over32/",
+                                "vector_strip8_256x256_over32/",
+                                "vector_strip9_256x256_over32/"]
+
+            paths_vectors = [start_dir + f for f in paths_vectors]
 
 
-        elif  self.variant == 112:
+        if self.variant == "112" or self.variant == "112_clean":
             # 112x112 version
-            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip1/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip2/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip3/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip4/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip5/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip6/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip7/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip8/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip9/"
-                             ]
 
             paths_2012 =   ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip1_112x112_png/",
                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip2_112x112_png/",
@@ -364,6 +439,33 @@ class DatasetInstance_OurAerial(object):
                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip7_112x112_png/",
                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip8_112x112_png/",
                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip9_112x112_png/"]
+
+        if  self.variant == "112":
+            # 112x112 version
+            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip1/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip2/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip3/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip4/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip5/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip6/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip7/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip8/",
+                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip9/"
+                             ]
+        elif self.variant == "112_clean":
+            start_dir = "/home/pf/pfstaff/projects/ruzicka/dataset_initial_view(secondInst)/03_06_vectorStrips_areaOnlyBiggerThan40/vector_strips_a40p_112x112/"
+            paths_vectors = [   "vector_strip_1_a40p/",
+                                "vector_strip_2_a40p/",
+                                "vector_strip_3_a40p/",
+                                "vector_strip_4_a40p/",
+                                "vector_strip_5_a40p/",
+                                "vector_strip_6_a40p/",
+                                "vector_strip_7_a40p/",
+                                "vector_strip_8_a40p/",
+                                "vector_strip_9_a40p/"]
+            paths_vectors = [start_dir + f for f in paths_vectors]
+
+
 
         files_paths_2012 = self.load_path_lists(paths_2012)
         all_2012_png_paths, edge_tile_2012, total_tiles_2012 = self.process_path_lists(files_paths_2012, paths_2012)
@@ -416,13 +518,22 @@ class DatasetInstance_OurAerial(object):
 
         img = io.imread(filename)
         arr = np.asarray(img)
-        # threshold it
-        # anything <= 0 (usually just one value) => 0 (no change)
-        # anything >  0                          => 1 (change)
 
-        thr = 0
-        arr[arr > thr] = 1
-        arr[arr <= thr] = 0
+        # threshold it
+        if self.variant == "256_cleanManual":
+            ## FOR NEWER DATASETS
+            arr[arr <= 0] = 0
+            arr[arr == 65535] = 0 # hi ArcGis ghosts
+            arr[arr != 0] = 1
+
+        else:
+            ## FOR OLDER DATASETS
+            thr = 0
+            arr[arr > thr] = 1
+            arr[arr <= thr] = 0
+
+            # anything <= 0 (usually just one value) => 0 (no change)
+            # anything >  0                          => 1 (change)
         return arr
 
     def load_raster_image(self, filename):

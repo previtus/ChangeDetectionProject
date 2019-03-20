@@ -35,6 +35,85 @@ class Evaluator(object):
         #plt.plot(sorted_predictions)
         #plt.show()
 
+    def try_all_thresholds(self, predicted, labels, range_values = [0.0, 0.5, 1.0], title_txt=""):
+        plt.figure(figsize=(10, 3)) # w, h
+
+        xs = []
+        ys_recalls = []
+        ys_precisions = []
+        ys_accuracies = []
+        for thr in range_values: #np.arange(0.0,1.0,0.01):
+            xs.append(thr)
+            print("threshold=",thr)
+            #_, recall, precision, accuracy = self.calculate_metrics(predicted, labels, threshold=thr)
+            if "NoChange" in title_txt:
+                print("from the position of NoChange class instead...")
+                recall, precision, accuracy = self.calculate_recall_precision_accuracy_NOCHANGECLASS(predicted, labels, threshold=thr)
+            else:
+                recall, precision, accuracy = self.calculate_recall_precision_accuracy(predicted, labels, threshold=thr)
+
+            ys_recalls.append(recall)
+            ys_precisions.append(precision)
+            ys_accuracies.append(accuracy)
+
+        print("xs", len(xs), xs)
+        print("ys_recalls", len(ys_recalls), ys_recalls)
+        print("ys_precisions", len(ys_precisions), ys_precisions)
+        print("ys_accuracies", len(ys_accuracies), ys_accuracies)
+
+        if title_txt == "":
+            plt.title('Changing the threshold values')
+        else:
+            plt.title(title_txt)
+        plt.xlabel('threshold value')
+        plt.ylabel('metrics')
+
+        plt.plot(xs, ys_recalls, '-o', label="Recall")
+        plt.plot(xs, ys_precisions, '-o', label="Precision")
+        plt.plot(xs, ys_accuracies, '-o', label="Accuracy")
+        plt.legend()
+
+        plt.ylim(0.0, 1.0)
+
+        plt.show()
+
+    def calculate_recall_precision_accuracy(self, predictions, ground_truths, threshold = 0.5):
+        if len(predictions.shape) > 1:
+            predictions_copy = np.array(predictions)
+        else:
+            predictions_copy = np.array([predictions])
+
+        for image in predictions_copy:
+            image[image >= threshold] = 1
+            image[image < threshold] = 0
+
+        arr_predictions = predictions_copy.flatten()
+        arr_gts = ground_truths.flatten()
+
+        sklearn_accuracy = sklearn.metrics.accuracy_score(arr_gts, arr_predictions)
+        sklearn_precision = sklearn.metrics.precision_score(arr_gts, arr_predictions)
+        sklearn_recall = sklearn.metrics.recall_score(arr_gts, arr_predictions)
+
+        return sklearn_recall, sklearn_precision, sklearn_accuracy
+
+    def calculate_recall_precision_accuracy_NOCHANGECLASS(self, predictions, ground_truths, threshold = 0.5):
+        if len(predictions.shape) > 1:
+            predictions_copy = np.array(predictions)
+        else:
+            predictions_copy = np.array([predictions])
+
+        for image in predictions_copy:
+            image[image >= threshold] = 1
+            image[image < threshold] = 0
+
+        arr_predictions = predictions_copy.flatten()
+        arr_gts = ground_truths.flatten()
+
+        sklearn_accuracy = sklearn.metrics.accuracy_score(arr_gts, arr_predictions)
+        sklearn_precision = sklearn.metrics.precision_score(arr_gts, arr_predictions, pos_label=0) # NO CHANGE CLASS
+        sklearn_recall = sklearn.metrics.recall_score(arr_gts, arr_predictions, pos_label=0) # NO CHANGE CLASS
+
+        return sklearn_recall, sklearn_precision, sklearn_accuracy
 
     def calculate_metrics(self, predictions, ground_truths, threshold = 0.5):
 
@@ -130,4 +209,4 @@ class Evaluator(object):
         print("=====================================================================================")
 
         predictions_thresholded = predictions_copy
-        return predictions_thresholded
+        return predictions_thresholded, recall, precision, accuracy

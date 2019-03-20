@@ -9,7 +9,8 @@ import numpy as np
 from skimage import io
 from tqdm import tqdm
 import h5py
-
+from PIL import Image
+import cv2
 
 class DatasetInstance_ONERA(object):
     """
@@ -28,6 +29,9 @@ class DatasetInstance_ONERA(object):
         self.settings = settings
         self.dataLoader = dataLoader
         self.variant = 0
+        self.IMAGE_RESOLUTION = 112 #when tiled
+        self.debugger = Debugger.Debugger(settings)
+
 
         # 383 images => 250 train, 50 val, 83 test
         self.split_train = 300
@@ -59,6 +63,92 @@ class DatasetInstance_ONERA(object):
 
     ### Alternative dataset, the "Onera Satellite Change Detection dataset"
     def load_dataset(self):
+        #return self.load_dataset_fullimgs()
+        return self.load_dataset_tiled()
+
+    def load_dataset_fullimgs(self):
+        images_path = "/scratch/ruzicka/dataset_initial_view/02_11_OSCD_dataset/63_dataset/Onera Satellite Change Detection dataset - Images/"
+        labels_path = "/scratch/ruzicka/dataset_initial_view/02_11_OSCD_dataset/63_training/Onera Satellite Change Detection dataset - Train Labels/"
+        train = "aguasclaras,bercy,bordeaux,nantes,paris,rennes,saclay_e,abudhabi,cupertino,pisa,beihai,hongkong,beirut,mumbai"
+        test = "brasilia,montpellier,norcia,rio,saclay_w,valencia,dubai,lasvegas,milano,chongqing"
+
+        # for each in train:
+        # image: /<name>/pair/img1.png x img2.png
+        # label: /<name>/cm/cm.png
+
+        trains = train.split(",")
+        tests = test.split(",")
+
+        train_x_left_paths = []
+        train_x_right_paths = []
+        train_y_label_paths = []
+
+        for train in trains:
+            path = images_path + train + "/pair/"
+            train_x_left_paths.append(path + "img1.png")
+            train_x_right_paths.append(path + "img2.png")
+            # train_y_label_paths.append(labels_path + train + "/cm/cm.png")
+            train_y_label_paths.append(labels_path + train + "/cm/" + train + "-cm.tif")
+        # tile_paths_old = [f for f in listdir(path_old) if isfile(join(path_old, f))]
+
+        test_x_left_paths = []
+        test_x_right_paths = []
+
+        for test in tests:
+            path = images_path + test + "/pair/"
+            test_x_left_paths.append(path + "img1.png")
+            test_x_right_paths.append(path + "img2.png")
+
+        print("Training paths:", len(train_x_left_paths), "left", len(train_x_right_paths), "right", len(train_y_label_paths), "labels")
+        print("Test paths:", len(test_x_left_paths), "left", len(test_x_right_paths), "right", "no labels")
+
+        train_X_left = []
+        train_X_right = []
+        train_Y = []
+
+        for i in range(len(train_x_left_paths)):
+            # for i in range(1):
+            train_left_img = self.load_raster_image(train_x_left_paths[i])
+            train_right_img = self.load_raster_image(train_x_right_paths[i])
+            train_label_img = self.load_vector_image(train_y_label_paths[i])
+
+            train_X_left.append(train_left_img)
+            train_X_right.append(train_right_img)
+            train_Y.append(train_label_img)
+
+        test_X_left = []
+        test_X_right = []
+
+        for i in range(len(test_x_left_paths)):
+            # for i in range(1):
+            test_left_img = self.load_raster_image(test_x_left_paths[i])
+            test_right_img = self.load_raster_image(test_x_right_paths[i])
+
+            test_X_left.append(test_left_img)
+            test_X_right.append(test_right_img)
+
+        print("Training data:", len(train_X_left), train_X_left[0].shape, "left", len(train_X_right), train_X_right[0].shape, "right",len(train_Y), train_Y[0].shape, "labels")
+        print("Test data:", len(test_X_left), test_X_left[0].shape, "left", len(test_X_right), test_X_right[0].shape, "right", "no labels")
+
+        train_X_left = np.asarray(train_X_left)
+        train_X_right = np.asarray(train_X_right)
+        train_Y = np.asarray(train_Y)
+        test_X_left = np.asarray(test_X_left)
+        test_X_right = np.asarray(test_X_right)
+
+        print("whole train_X_left:", train_X_left.shape)
+        for i in range(len(train_X_left)):
+            print("L,R,Y\t:", train_X_left[i].shape, train_X_right[i].shape, train_Y[i].shape)
+
+        data = [train_X_left, train_X_right, train_Y]
+        paths = [train_x_left_paths, train_x_right_paths, train_y_label_paths]
+        self.data_test = [test_X_left, test_X_right]
+        self.paths_test = [test_x_left_paths, test_x_right_paths]
+        return data, paths
+
+
+
+    def load_dataset_tiled(self):
         lefts = []
         rights = []
         labels = []
@@ -103,7 +193,6 @@ class DatasetInstance_ONERA(object):
 
         # load as images and possibly also crop!
         # tile it into 112x112 tiles?
-        from PIL import Image
 
         def tile_from_image(img, desired_size):
             repetitions = int(np.floor(min(img.size[0] / desired_size, img.size[1] / desired_size)))
@@ -272,3 +361,68 @@ class DatasetInstance_ONERA(object):
         test = [test_L, test_R, test_V]
 
         return train, val, test
+
+    """
+    def load_vector_image(self, filename):
+        if filename == None:
+            arr = np.zeros((self.IMAGE_RESOLUTION,self.IMAGE_RESOLUTION), dtype=float)
+            return arr
+
+        img = io.imread(filename)
+        arr = np.asarray(img)
+        #arr = arr.convert('L') #?
+
+        # threshold it
+        # anything <= 0 (usually just one value) => 0 (no change)
+        # anything >  0                          => 1 (change)
+
+        thr = 0
+        arr[arr > thr] = 1
+        arr[arr <= thr] = 0
+        return arr
+    """
+
+    def load_raster_image(self, filename):
+        img = cv2.imread(filename)
+
+        height, width, channels = img.shape
+        print (filename,height, width, channels)
+        # Create a black image
+        x = height if height > width else width
+        y = height if height > width else width
+        square= np.zeros((x,y,3), np.uint8)
+
+        square[int((y-height)/2):int(y-(y-height)/2), int((x-width)/2):int(x-(x-width)/2)] = img
+        #cv2.imshow("original", img)
+        #cv2.imshow("black square", square)
+        #cv2.waitKey(0)
+
+        arr = np.asarray(square)
+        return arr
+
+    def load_vector_image(self, filename):
+        img = cv2.imread(filename)
+
+        img = (img - 1.0)
+        # threshold it
+        # anything <= 0 (usually just one value) => 0 (no change)
+        # anything >  0                          => 1 (change)
+        thr = 0.5
+        img[img > thr] = 1.0
+        img[img <= thr] = 0.0
+
+        height, width, channels = img.shape
+        print (filename,height, width, channels)
+        # Create a black image
+        x = height if height > width else width
+        y = height if height > width else width
+        square = np.zeros((x,y,3))
+
+        square[int((y-height)/2):int(y-(y-height)/2), int((x-width)/2):int(x-(x-width)/2)] = img
+
+        #cv2.imshow("original", img)
+        #cv2.imshow("black square", square)
+        #cv2.waitKey(0)
+
+        arr = np.asarray(img)
+        return arr
