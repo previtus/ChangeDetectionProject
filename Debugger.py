@@ -225,7 +225,7 @@ class Debugger(object):
         plt.show()
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
-    def viewQuadrupples(self, lefts, rights, labels, predicted, txts=[], how_many=3, off=0):
+    def viewQuadrupples(self, lefts, rights, labels, predicted, txts=[], how_many=3, off=0, show=True, save=False, name="lastplot"):
         rows, columns = how_many, 4
         fig = plt.figure(figsize=(10, 8))
         k = 1
@@ -269,8 +269,10 @@ class Debugger(object):
             fig.gca().set(xlabel=text, xticks=[], yticks=[])
             k += 4
 
-
-        plt.show()
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(name+".png")
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
     def explore_set_stats(self,arr_set):
@@ -280,7 +282,7 @@ class Debugger(object):
 
     ### TRAINING VISUALIZATIONS:
 
-    def nice_plot_history(self, history, added_plots = [], no_val=False):
+    def nice_plot_history(self, history, added_plots = [], no_val=False, show=True, save=False, name="lastplot"):
         fig, ax = plt.subplots()
 
         loss = history.history["loss"]
@@ -367,7 +369,12 @@ class Debugger(object):
 
         fig.canvas.mpl_connect('key_press_event', press)
 
-        plt.show()
+        if show:
+            plt.show()
+        if save:
+            plt.savefig(name+".png")
+            #plt.savefig(name+".pdf")
+
 
     # File helpers
 

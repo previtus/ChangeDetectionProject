@@ -17,17 +17,38 @@ def main(args):
     dataset = Dataset.Dataset(settings)
     evaluator = Evaluator.Evaluator(settings)
 
+    settings.run_name = settings.run_name + "AYRAN"
+    show = False
+    save = True
+
     #dataset.dataset
     model = ModelHandler.ModelHandler(settings, dataset)
 
-    #model.model.train()
+    model.model.train(show=show,save=save)
 
     # Model 2 ...
-    model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_.h5")
+
+    # TODO Note:
+    # - change settings.run_name to have saved plots
+    # write down:
+    # - model bottom (resnet34 ?)
+    # - initial weights (imagenet ?)
+    # - used augmentation ?
+    # - epoch number
+    # - class weights changed ?
+    # - ... any other special cool thing ...
+
+    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/LASTONE_TMP.h5")
 
 
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_25ep_ImagenetFrozenEnc.h5") # 26,428,523 > 5,139,429 trainable params - faster?
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetBase.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_54ep_ImagenetBase_best_so_far_for_eastly_stops.h5") # early stop at 54 ep
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_CustomDSMBase.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_49ep_CustomDSMBase_best_so_far_for_eastly_stops.h5")
 
 
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_.h5")
     # ...
 
 
@@ -78,7 +99,7 @@ def main(args):
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights_Take2.h5")
     #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")
 
-    model.model.test(evaluator)
+    model.model.test(evaluator,show=show,save=save)
     #model.model.test_show_on_train_data_to_see_overfit(evaluator)
 
 if __name__ == '__main__':

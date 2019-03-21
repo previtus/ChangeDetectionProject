@@ -11,6 +11,7 @@ class Dataset(object):
         self.dataLoader = DataLoader.DataLoader(settings)
         self.debugger = Debugger.Debugger(settings)
 
+        Using_Model1b_Needing_Labels = False
         # just "_clean" is rubbis!
         # manual cleanup at 256_clean2 - 256x256 without overlap
         #dataset_variant = "256"
@@ -41,7 +42,7 @@ class Dataset(object):
         self.train, self.val, self.test = self.dataPreprocesser.process_dataset(self.train, self.val, self.test)
 
         # only if we use model 1b and if we have our data and not onera
-        if True:
+        if Using_Model1b_Needing_Labels:
             self.train_classlabels = self.datasetInstance.mask_label_into_class_label(self.train[2])
             self.val_classlabels = self.datasetInstance.mask_label_into_class_label(self.val[2])
             self.test_classlabels = self.datasetInstance.mask_label_into_class_label(self.test[2])

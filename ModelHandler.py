@@ -8,5 +8,9 @@ class ModelHandler(object):
     def __init__(self, settings, dataset):
         self.settings = settings
         #self.model = Model1_SkipSiamFCN.Model1_SkipSiamFCN(settings, dataset)
+
+        # when using full images ...
+        #self.model.local_setting_batch_size = 1
+
         #self.model = Model1b_SkipSiamFCN_withClassLabel.Model1b_SkipSiamFCN_withClassLabel(settings, dataset)
         self.model = Model2_SiamUnet_Encoder.Model2_SiamUnet_Encoder(settings, dataset)

@@ -265,10 +265,12 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
         self.debugger.explore_set_stats(predicted)
 
         off = 0
+        by = 4
+        by = min(by, len(test_L))
         while off < len(predicted):
             #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, txts, how_many=4, off=off)
-            off += 4
+            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by, off=off)
+            off += by
 
 
     def test_show_on_train_data_to_see_overfit(self, evaluator):

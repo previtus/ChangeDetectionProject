@@ -11,6 +11,8 @@ from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils import to_categorical
 import numpy as np
+from keras.callbacks import ModelCheckpoint
+from loss_weighted_crossentropy import weighted_categorical_crossentropy
 
 class Model1_SkipSiamFCN(object):
     """
@@ -23,13 +25,13 @@ class Model1_SkipSiamFCN(object):
         self.dataPreprocesser = dataset.dataPreprocesser
         self.debugger = Debugger.Debugger(settings)
 
-        self.use_sigmoid_or_softmax = 'sigmoid' # softmax is for multiple categories
+        self.use_sigmoid_or_softmax = 'softmax' # softmax is for multiple categories
 
         self.model = self.create_model(input_size = None, channels = 3)
         self.model.summary()
 
         self.local_setting_batch_size = 32 #32
-        self.local_setting_epochs = 30 #100
+        self.local_setting_epochs = 5 #100
 
         self.train_data_augmentation = False
 
@@ -51,7 +53,6 @@ class Model1_SkipSiamFCN(object):
         train_V = train_V.reshape(train_V.shape + (1,))
         val_V = val_V.reshape(val_V.shape + (1,))
 
-
         print("left images (train)")
         self.debugger.explore_set_stats(train_L)
         print("right images (train)")
@@ -63,20 +64,15 @@ class Model1_SkipSiamFCN(object):
             train_V = to_categorical(train_V)
             val_V = to_categorical(val_V)
 
-        # Manual inspections, some labels are "weird"
-        """
-        # 1639 1909
-        inspect_i = 1639
-        left_path = self.dataset.train_paths[0][inspect_i].split("/")[-1]
-        right_path = self.dataset.train_paths[1][inspect_i].split("/")[-1]
-        vec_path = self.dataset.train_paths[2][inspect_i].split("/")[-1]
-        txts = ["\n\n\n" + left_path + " | " + right_path  + " | " + vec_path]
-        self.debugger.viewTripples([train_L[inspect_i]], [train_R[inspect_i]], [train_V[inspect_i, :, :, 0]],txts=txts,how_many=1, off=0)
-        # doublecheck
-        self.debugger.viewTrippleFromUrl(self.dataset.train_paths[0][inspect_i], self.dataset.train_paths[1][inspect_i], self.dataset.train_paths[2][inspect_i])
-        """
+        print("label images categorical (train)")
+        self.debugger.explore_set_stats(train_V)
+
+        added_plots = []
 
         if self.train_data_augmentation:
+            print("FOOO")
+            """
+            if self.train_data_augmentation:
             # Training with data augmentation:
             from keras.preprocessing.image import ImageDataGenerator
             data_gen_args = dict(#featurewise_center=True,
@@ -155,22 +151,30 @@ class Model1_SkipSiamFCN(object):
                 print("train",list(zip(self.model.metrics_names, metrics_train)))
                 history.history["loss"].append(metrics_train[0])
                 history.history["acc"].append(metrics_train[1])
+            """
 
         else:
+            checkpoint = ModelCheckpoint("model2best_so_far_for_eastly_stops.h5", monitor='val_categorical_accuracy', verbose=1, save_best_only=True, mode='max')
+            callbacks = [checkpoint]
+            callbacks = []
+
             # Regular training:
             history = self.model.fit([train_L, train_R], train_V, batch_size=self.local_setting_batch_size, epochs=self.local_setting_epochs,
-                                     validation_data=([val_L, val_R], val_V))
-            print(history.history)
+                                     validation_data=([val_L, val_R], val_V), verbose=2, callbacks=callbacks) # 2 ~ 1 line each ep
+            #print(history.history)
+
             if self.use_sigmoid_or_softmax == 'sigmoid':
-                history.history["acc"] = history.history["binary_accuracy"]
+                history.history["acc"] = history.history["binary_accuracy"]  # we care about this one to show
                 history.history["val_acc"] = history.history["val_binary_accuracy"]
+                added_plots = []
             else:
-                history.history["acc"] = history.history["categorical_accuracy"]
+                history.history["acc"] = history.history["categorical_accuracy"]  # we care about this one to show
                 history.history["val_acc"] = history.history["val_categorical_accuracy"]
+                added_plots = []
+
             print(history.history)
 
-
-        self.debugger.nice_plot_history(history)
+        self.debugger.nice_plot_history(history,added_plots)
 
 
     def save(self, path=""):
@@ -191,6 +195,10 @@ class Model1_SkipSiamFCN(object):
         print("Test")
 
         test_L, test_R, test_V = self.dataset.test
+
+        if len(test_L) == 0:
+            print("The test set is empty, using validation instead!")
+            test_L, test_R, test_V = self.dataset.val
 
         if test_L.shape[3] > 3:
             # 3 channels only - rgb
@@ -231,13 +239,9 @@ class Model1_SkipSiamFCN(object):
         #evaluator.histogram_of_predictions(predicted)
         print("threshold=0.5")
         evaluator.calculate_metrics(predicted, test_V)
-        print("threshold=0.1")
-        evaluator.calculate_metrics(predicted, test_V, threshold=0.1)
-        print("threshold=0.05")
-        evaluator.calculate_metrics(predicted, test_V, threshold=0.05)
-        print("threshold=0.01")
-        predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
-        predictions_thresholded = predictions_thresholded[0].astype(int)
+
+        #predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
+        #predictions_thresholded = predictions_thresholded[0].astype(int)
 
         test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
 
@@ -258,10 +262,12 @@ class Model1_SkipSiamFCN(object):
         self.debugger.explore_set_stats(predicted)
 
         off = 0
+        by = 4
+        by = min(by, len(test_L))
         while off < len(predicted):
             #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=4, off=off)
-            off += 4
+            self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by, off=off)
+            off += by
 
 
     def test_show_on_train_data_to_see_overfit(self, evaluator):
@@ -414,18 +420,14 @@ class Model1_SkipSiamFCN(object):
         # model.compile(optimizer=Adam(lr=0.001), loss="binary_crossentropy", metrics=["accuracy"])
         # model.compile(optimizer=Adam(lr=0.0001), loss='binary_crossentropy', metrics=['accuracy'])
 
-        """ Experiment
-        # with the contrastive loss the labeling was done in other way around!, which gives us the opposite predictions
-        from keras import backend as K
-        def contrastive_loss(y_true, y_pred):
-            '''Contrastive loss from Hadsell-et-al.'06
-            http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
-            '''
-            margin = 1
-            sqaure_pred = K.square(y_pred)
-            margin_square = K.square(K.maximum(margin - y_pred, 0))
-            return K.mean(y_true * sqaure_pred + (1 - y_true) * margin_square)
-        """
+
+
+
+        loss = "categorical_crossentropy"
+        weights = [1, 3]
+        loss = weighted_categorical_crossentropy(weights)
+        metric = "categorical_accuracy"
+
 
         model.compile(optimizer=Adam(lr=0.00001), loss=loss, metrics=[metric, 'mse'])
 

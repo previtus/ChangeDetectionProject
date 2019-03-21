@@ -12,6 +12,10 @@ import h5py
 from PIL import Image
 import cv2
 
+from albumentations import (
+    PadIfNeeded
+)
+
 class DatasetInstance_ONERA(object):
     """
     Contains specific setting for one dataset instance.
@@ -29,16 +33,23 @@ class DatasetInstance_ONERA(object):
         self.settings = settings
         self.dataLoader = dataLoader
         self.variant = 0
-        self.IMAGE_RESOLUTION = 112 #when tiled
         self.debugger = Debugger.Debugger(settings)
 
+        self.using_tiles = False
 
-        # 383 images => 250 train, 50 val, 83 test
-        self.split_train = 300
-        self.split_val = 330
-        self.CHANNEL_NUMBER = 3
+        if self.using_tiles:
+            # 383 images => 250 train, 50 val, 83 test
+            self.split_train = 300
+            self.split_val = 330
+            self.CHANNEL_NUMBER = 3
+            self.IMAGE_RESOLUTION = 112  # when tiled
 
-        self.save_path_ = "ONERA_preloadedImgs_sub"
+            self.save_path_ = "ONERA_preloadedImgs_sub"
+        else:
+            self.split_train = 12
+            self.split_val = 14
+            self.CHANNEL_NUMBER = 3
+            self.IMAGE_RESOLUTION = None
 
     def get_paths(self):
         lefts_paths = []
@@ -63,14 +74,20 @@ class DatasetInstance_ONERA(object):
 
     ### Alternative dataset, the "Onera Satellite Change Detection dataset"
     def load_dataset(self):
-        #return self.load_dataset_fullimgs()
-        return self.load_dataset_tiled()
+        if self.using_tiles:
+            return self.load_dataset_tiled()
+        else:
+            return self.load_dataset_fullimgs()
+
 
     def load_dataset_fullimgs(self):
         images_path = "/scratch/ruzicka/dataset_initial_view/02_11_OSCD_dataset/63_dataset/Onera Satellite Change Detection dataset - Images/"
         labels_path = "/scratch/ruzicka/dataset_initial_view/02_11_OSCD_dataset/63_training/Onera Satellite Change Detection dataset - Train Labels/"
         train = "aguasclaras,bercy,bordeaux,nantes,paris,rennes,saclay_e,abudhabi,cupertino,pisa,beihai,hongkong,beirut,mumbai"
         test = "brasilia,montpellier,norcia,rio,saclay_w,valencia,dubai,lasvegas,milano,chongqing"
+
+        shared_max_size = 1184 # divisible by 32
+        self.IMAGE_RESOLUTION = shared_max_size
 
         # for each in train:
         # image: /<name>/pair/img1.png x img2.png
@@ -112,6 +129,8 @@ class DatasetInstance_ONERA(object):
             train_right_img = self.load_raster_image(train_x_right_paths[i])
             train_label_img = self.load_vector_image(train_y_label_paths[i])
 
+            train_left_img, train_right_img, train_label_img = self.applyPad(train_left_img,train_right_img,train_label_img, shared_max_size)
+
             train_X_left.append(train_left_img)
             train_X_right.append(train_right_img)
             train_Y.append(train_label_img)
@@ -123,6 +142,8 @@ class DatasetInstance_ONERA(object):
             # for i in range(1):
             test_left_img = self.load_raster_image(test_x_left_paths[i])
             test_right_img = self.load_raster_image(test_x_right_paths[i])
+
+            test_left_img, test_right_img, _ = self.applyPad(test_left_img,test_right_img,None, shared_max_size)
 
             test_X_left.append(test_left_img)
             test_X_right.append(test_right_img)
@@ -136,6 +157,10 @@ class DatasetInstance_ONERA(object):
         test_X_left = np.asarray(test_X_left)
         test_X_right = np.asarray(test_X_right)
 
+        #print("Visualization >> ")
+        #self.debugger.viewTripples(train_X_left, train_X_right, train_Y, off=0, how_many=3)
+
+
         print("whole train_X_left:", train_X_left.shape)
         for i in range(len(train_X_left)):
             print("L,R,Y\t:", train_X_left[i].shape, train_X_right[i].shape, train_Y[i].shape)
@@ -144,9 +169,31 @@ class DatasetInstance_ONERA(object):
         paths = [train_x_left_paths, train_x_right_paths, train_y_label_paths]
         self.data_test = [test_X_left, test_X_right]
         self.paths_test = [test_x_left_paths, test_x_right_paths]
+
+
         return data, paths
 
+    def applyPad(self, l, r, y, shared_max_size):
 
+        if y is None:
+            image = l
+            aug = PadIfNeeded(p=1, min_height=shared_max_size, min_width=shared_max_size,
+                              border_mode=cv2.BORDER_CONSTANT)
+            augmented_both = aug(image=l, mask=r)
+            l_padded = augmented_both['image']
+            r_padded = augmented_both['mask']
+            return l_padded, r_padded, None
+
+        image = l
+        aug = PadIfNeeded(p=1, min_height=shared_max_size, min_width=shared_max_size, border_mode=cv2.BORDER_CONSTANT)
+        augmented_l = aug(image=l, mask=y)
+        l_padded = augmented_l['image']
+        mask_padded = augmented_l['mask']
+        augmented_r = aug(image=r, mask=y)
+        r_padded = augmented_r['image']
+        #self.debugger.viewTripples([l_padded], [r_padded], [mask_padded], off=0, how_many=1)
+
+        return l_padded, r_padded, mask_padded
 
     def load_dataset_tiled(self):
         lefts = []
@@ -386,7 +433,7 @@ class DatasetInstance_ONERA(object):
         img = cv2.imread(filename)
 
         height, width, channels = img.shape
-        print (filename,height, width, channels)
+        #print (filename,height, width, channels)
         # Create a black image
         x = height if height > width else width
         y = height if height > width else width
@@ -401,7 +448,7 @@ class DatasetInstance_ONERA(object):
         return arr
 
     def load_vector_image(self, filename):
-        img = cv2.imread(filename)
+        img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
 
         img = (img - 1.0)
         # threshold it
@@ -411,12 +458,12 @@ class DatasetInstance_ONERA(object):
         img[img > thr] = 1.0
         img[img <= thr] = 0.0
 
-        height, width, channels = img.shape
-        print (filename,height, width, channels)
+        height, width = img.shape
+        #print (filename,height, width, channels)
         # Create a black image
         x = height if height > width else width
         y = height if height > width else width
-        square = np.zeros((x,y,3))
+        square = np.zeros((x,y))
 
         square[int((y-height)/2):int(y-(y-height)/2), int((x-width)/2):int(x-(x-width)/2)] = img
 
@@ -424,5 +471,5 @@ class DatasetInstance_ONERA(object):
         #cv2.imshow("black square", square)
         #cv2.waitKey(0)
 
-        arr = np.asarray(img)
+        arr = np.asarray(square)
         return arr

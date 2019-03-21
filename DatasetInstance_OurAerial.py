@@ -46,8 +46,6 @@ class DatasetInstance_OurAerial(object):
                 self.dataset_version = "256x256_cleanManual_noOver"
             if self.variant == "256_cleanManual":
                 self.dataset_version = "256x256_cleanManual"
-                self.local_setting_skip_rows = 2
-                self.local_setting_skip_columns = 2
 
                 # possibly can have a more generous self.bigger_than_percent ... ?
 
