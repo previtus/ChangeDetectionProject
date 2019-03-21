@@ -20,13 +20,21 @@ def main(args):
     #dataset.dataset
     model = ModelHandler.ModelHandler(settings, dataset)
 
-    #model.model.train()
+    model.model.train()
+
+    # Model 2 ...
+
+
+
+
+    # ...
+
 
     # clean 2 - manual cleaning, only 256x256 with 32px overlap ("256_cleanManual")
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1.h5") # is 1 to 100
 
 
-    model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1_1to3w.h5")#1 to 3, 30 ep
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1_1to3w.h5")#1 to 3, 30 ep
     #as a sanity check
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1_1to1w.h5")#1 to 1, 30 ep
 
@@ -69,7 +77,7 @@ def main(args):
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights_Take2.h5")
     #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")
 
-    model.model.test(evaluator)
+    #model.model.test(evaluator)
     #model.model.test_show_on_train_data_to_see_overfit(evaluator)
 
 if __name__ == '__main__':
