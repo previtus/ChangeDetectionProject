@@ -303,7 +303,7 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
 
         print("MASK EVALUATION")
         print("trying thresholds ...")
-        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.01), title_txt="Masks (all pixels 0/1) evaluated [Change Class]")
+        evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.01), title_txt="Masks (all pixels 0/1) evaluated [Change Class]")
 
         # Evaluator
         #evaluator.histogram_of_predictions(predicted)
@@ -506,14 +506,15 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
             """
 
             weights = [w_class0, w_class1] # inversly to the class distribution
-            ratio = w_class1 / w_class0 # ~ 60 cca ... is too much
+            ratio = weights[1] / weights[0] # ~ 60 cca ... is too much
             print("log weights according to data distribution (subset)", weights, "ratio (how much does 1 have weight over 0) is:", ratio)
 
             weights = [1, 3]
-            ratio = w_class1 / w_class0
+            ratio = weights[1] / weights[0]
             print("log weights according to data distribution (subset)", weights, "ratio (how much does 1 have weight over 0) is:", ratio)
 
-            loss = weighted_categorical_crossentropy(weights)
+            # mask (softmaxed label image) and label (0 or 1)
+            loss = [weighted_categorical_crossentropy(weights), "binary_crossentropy"]
 
             classes_out = 2 #now at least, only 0 or 1
         else:

@@ -20,11 +20,15 @@ def main(args):
     #dataset.dataset
     model = ModelHandler.ModelHandler(settings, dataset)
 
-    model.model.train()
+    #model.model.train()
 
     # clean 2 - manual cleaning, only 256x256 with 32px overlap ("256_cleanManual")
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1.h5") # is 1 to 100
-    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1_1to3w.h5")#1 to 3
+
+
+    model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1_1to3w.h5")#1 to 3, 30 ep
+    #as a sanity check
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel1b_cleanManual_256dataset_WeightsT1_1to1w.h5")#1 to 1, 30 ep
 
 
 
