@@ -1,3 +1,7 @@
+import matplotlib, os
+if not('DISPLAY' in os.environ):
+    matplotlib.use("Agg")
+
 import DataLoader, DataPreprocesser, Dataset, Debugger, Settings, ModelHandler, Evaluator
 from timeit import default_timer as timer
 from datetime import *
@@ -9,6 +13,7 @@ day = str(datetime.now().day)
 import argparse
 
 parser = argparse.ArgumentParser(description='Project: Change detection on aerial images.')
+parser.add_argument('-name', help='run name - will output in this dir', default="Run-"+month+"-"+day)
 
 def main(args):
     print(args)
@@ -17,7 +22,7 @@ def main(args):
     dataset = Dataset.Dataset(settings)
     evaluator = Evaluator.Evaluator(settings)
 
-    settings.run_name = settings.run_name + "AYRAN"
+    #settings.run_name = settings.run_name + "AYRAN"
     show = False
     save = True
 
@@ -38,16 +43,35 @@ def main(args):
     # - class weights changed ?
     # - ... any other special cool thing ...
 
-    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/LASTONE_TMP.h5")
+    # Next = train Resnet50 on the same dataset without the whole STRIP2 (to have some large Test images)
 
+    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_seresnext50-8batch_Augmentation1to1_ClassWeights1to3.h5")
 
-    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_25ep_ImagenetFrozenEnc.h5") # 26,428,523 > 5,139,429 trainable params - faster?
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual-noStrip2_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet101-8batch_Augmentation1to1_ClassWeights1to3.h5")
+
+    # Senet154 crashed, 10hrs train + Imagenet weights + Data Aug 1:1 + Class weight 1:3
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_XYZep_ImagenetW_senet154-4batch_Augmentation1to1_ClassWeights1to3_early_stop_save_26mar-7am(cca10hrs).h5")
+
+    # Seresnet34 + Imagenet weights + Data Aug 1:1 + Class weight 1:3
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_seresnet34_Augmentation1to1_ClassWeights1to3.h5")
+
+    # Resnet50 (batch 16) + Imagenet weights + Data Aug 1:1 + Class weight 1:3
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3.h5")
+
+    # Resnet34 + Imagenet weights + Data Aug 1:1 + Class weight 1:3
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetW_Resnet34_Augmentation1to1_ClassWeights1to3.h5")
+
+    # Resnet34 + Imagenet weights + No Data Aug + Class weight 1:3
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetBase.h5")
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_54ep_ImagenetBase_best_so_far_for_eastly_stops.h5") # early stop at 54 ep
+
+    # Resnet34 + Custom DSM weights + No Data Aug + Class weight 1:3
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_CustomDSMBase.h5")
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_49ep_CustomDSMBase_best_so_far_for_eastly_stops.h5")
 
 
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_25ep_ImagenetFrozenEnc.h5") # 26,428,523 > 5,139,429 trainable params - faster?
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_.h5")
     # ...
 
@@ -106,8 +130,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     start = timer()
-
-    args.name = "Run"+day+"-"+month
 
     main(args)
 

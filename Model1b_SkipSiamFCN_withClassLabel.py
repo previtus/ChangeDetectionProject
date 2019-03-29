@@ -155,7 +155,7 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
             self.model.load_weights(path)
         print("Loaded model weights.")
 
-    def test(self, evaluator):
+    def test(self, evaluator, show=None, save=None):
         print("Test")
 
         test_L, test_R, test_V = self.dataset.test
@@ -215,9 +215,10 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
         #evaluator.try_all_thresholds(predicted_labels, test_class_Y, np.arange(0.0,1.0,0.01), title_txt="Labels (0/1) evaluated [Change Class]") #NoChange
 
 
-        print("threshold=0.02")
-        predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted_labels, test_class_Y, threshold=0.02)
-        predictions_thresholded = predictions_thresholded[0].astype(int)
+        #print("threshold=0.02")
+        #predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted_labels, test_class_Y, threshold=0.02)
+        #predictions_thresholded = predictions_thresholded[0].astype(int)
+
         #print("threshold=0.1")
         #predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted_labels, test_class_Y, threshold=0.1)
         #predictions_thresholded = predictions_thresholded[0].astype(int)
@@ -233,7 +234,7 @@ class Model1b_SkipSiamFCN_withClassLabel(object):
 
         print("MASK EVALUATION")
         print("trying thresholds ...")
-        evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.01), title_txt="Masks (all pixels 0/1) evaluated [Change Class]")
+        evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.05), title_txt="Masks (all pixels 0/1) evaluated [Change Class]")
 
         # Evaluator
         #evaluator.histogram_of_predictions(predicted)

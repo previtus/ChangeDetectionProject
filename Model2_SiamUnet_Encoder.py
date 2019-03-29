@@ -61,6 +61,9 @@ class Model2_SiamUnet_Encoder(object):
         assert self.use_sigmoid_or_softmax == 'softmax'
 
         BACKBONE = 'resnet34'
+        BACKBONE = 'resnet50' #batch 16
+        BACKBONE = 'resnet101' #batch 8
+        BACKBONE = 'seresnext50' #trying batch 16 as well
         custom_weights_file = "imagenet"
 
         #weights from imagenet finetuned on aerial data specific task - will it work? will it break?
@@ -70,10 +73,8 @@ class Model2_SiamUnet_Encoder(object):
         self.model = self.create_model(backbone=BACKBONE, custom_weights_file=custom_weights_file, input_size = resolution_of_input, channels = 3)
         self.model.summary()
 
-        self.local_setting_batch_size = 32 #32
-        self.local_setting_epochs = 2 #100
-
-        #54 was the last improvement on one before, perhaps that's enough
+        self.local_setting_batch_size = 8 #32
+        self.local_setting_epochs = 100 #100
 
         self.train_data_augmentation = True
 
@@ -285,8 +286,10 @@ class Model2_SiamUnet_Encoder(object):
         else:
             test_V_cat = test_V.reshape(test_V.shape + (1,))
 
-        predicted = self.model.predict(x=[test_L, test_R])
-        metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0)
+        #predicted = self.model.predict(x=[test_L, test_R])
+        #metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0)
+        predicted = self.model.predict(x=[test_L, test_R], batch_size=4)
+        metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0, batch_size=4)
         metrics_info = self.model.metrics_names
         print(list(zip(metrics_info, metrics)))
 
@@ -306,7 +309,8 @@ class Model2_SiamUnet_Encoder(object):
 
         #print("MASK EVALUATION")
         #print("trying thresholds ...")
-        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.01), title_txt="Masks (all pixels 0/1) evaluated [Change Class]")
+        
+        evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.05), title_txt="Masks (all pixels 0/1) evaluated [Change Class]", show=show,save=save, name=self.save_plot_path)
 
         # Evaluator
         #evaluator.histogram_of_predictions(predicted)
@@ -342,7 +346,7 @@ class Model2_SiamUnet_Encoder(object):
             off = 0
             by = 4
             by = min(by, len(test_L))
-            until_n = min(by*4, len(test_L))
+            until_n = min(by*8, len(test_L))
             while off < until_n:
                 #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
                 self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by, off=off, show=show,save=save, name=self.save_plot_path+"quad"+str(off))

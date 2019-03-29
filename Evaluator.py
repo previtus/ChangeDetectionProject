@@ -35,7 +35,8 @@ class Evaluator(object):
         #plt.plot(sorted_predictions)
         #plt.show()
 
-    def try_all_thresholds(self, predicted, labels, range_values = [0.0, 0.5, 1.0], title_txt=""):
+    def try_all_thresholds(self, predicted, labels, range_values = [0.0, 0.5, 1.0], title_txt="", show=True, save=False, name=""):
+        import matplotlib.pyplot as plt
         plt.figure(figsize=(10, 3)) # w, h
 
         xs = []
@@ -75,7 +76,12 @@ class Evaluator(object):
 
         plt.ylim(0.0, 1.0)
 
-        plt.show()
+        if save:
+           from matplotlib import pyplot as plt
+           plt.savefig(name+'_all_thesholds.png')
+
+        if show:
+           plt.show()
 
     def calculate_recall_precision_accuracy(self, predictions, ground_truths, threshold = 0.5):
         if len(predictions.shape) > 1:
