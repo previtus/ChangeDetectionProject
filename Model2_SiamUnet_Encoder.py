@@ -62,8 +62,8 @@ class Model2_SiamUnet_Encoder(object):
 
         BACKBONE = 'resnet34'
         BACKBONE = 'resnet50' #batch 16
-        BACKBONE = 'resnet101' #batch 8
-        BACKBONE = 'seresnext50' #trying batch 16 as well
+        #BACKBONE = 'resnet101' #batch 8
+        #BACKBONE = 'seresnext50' #trying batch 16 as well
         custom_weights_file = "imagenet"
 
         #weights from imagenet finetuned on aerial data specific task - will it work? will it break?
@@ -307,15 +307,50 @@ class Model2_SiamUnet_Encoder(object):
         # undo preprocessing steps?
         predicted = self.dataPreprocesser.postprocess_labels(predicted)
 
-        #print("MASK EVALUATION")
+
+        # Adding evaluation from the standpoint of each tile.
+        Tile_Based_Evaluation = True
+        if Tile_Based_Evaluation:
+            chosen_threshold = 0.01
+            test_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(self.dataset.test[2])
+
+            # This has to actually be thresholded before we calculate the tile label (we have to count occurance of 1s)
+            predictions_thresholded, _, _, _= evaluator.calculate_metrics(predicted, test_V, threshold=chosen_threshold)
+            predicted_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(predictions_thresholded)
+
+            print(test_classlabels[0:20])
+            print(predicted_classlabels[0:20])
+
+            print("TILE based EVALUATION")
+            #evaluator.histogram_of_predictions(test_classlabels)
+            #evaluator.histogram_of_predictions(predicted_classlabels)
+
+            # print("trying thresholds ...")
+            # evaluator.try_all_thresholds(predicted_labels, test_class_Y, np.arange(0.0,1.0,0.01), title_txt="Labels (0/1) evaluated [Change Class]") #NoChange
+
+            print("threshold=",chosen_threshold)
+            _, recall, precision, accuracy = evaluator.calculate_metrics(predicted_classlabels, test_classlabels, threshold=chosen_threshold) # thr arbitrary no? we have only 0/1 in here already
+
+            # Get indices of the misclassified samples
+            misclassified_indices = np.where(predicted_classlabels != test_classlabels)
+            print("indices:", misclassified_indices)
+            misclassified_indices = misclassified_indices[0]
+
+            for ind in misclassified_indices:
+                print("idx", ind, ":", predicted_classlabels[ind]," != ",test_classlabels[ind])
+
+
+        print("MASK EVALUATION")
         #print("trying thresholds ...")
         
-        evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.05), title_txt="Masks (all pixels 0/1) evaluated [Change Class]", show=show,save=save, name=self.save_plot_path)
+        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.05), title_txt="Masks (all pixels 0/1) evaluated [Change Class]", show=show,save=save, name=self.save_plot_path)
+        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,0.1,0.003), title_txt="Masks (all pixels 0/1) evaluated [Change Class]", show=show,save=save, name=self.save_plot_path)
+        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,0.1,0.003), title_txt="Masks (all pixels 0/1) evaluated [NoChange Class]", show=show,save=save, name=self.save_plot_path)
 
         # Evaluator
         #evaluator.histogram_of_predictions(predicted)
-        print("threshold=0.5")
-        evaluator.calculate_metrics(predicted, test_V, threshold=0.5)
+        print("threshold=0.01")
+        predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
 
         test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
 
@@ -333,6 +368,19 @@ class Model2_SiamUnet_Encoder(object):
         self.debugger.explore_set_stats(test_V)
         print("predicted images (test)")
         self.debugger.explore_set_stats(predicted)
+
+
+        if Tile_Based_Evaluation:
+            print("Misclassified samples (in total", len(misclassified_indices),"):")
+            if show:
+                off = 0
+                by = 3
+                by = min(by, len(test_L[misclassified_indices]))
+                while off < len(predicted):
+                    #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
+                    self.debugger.viewQuadrupples(test_L[misclassified_indices], test_R[misclassified_indices], test_V[misclassified_indices], predicted[misclassified_indices], how_many=by, off=off, show=show,save=save)
+                    off += by
+
 
         if show:
             off = 0

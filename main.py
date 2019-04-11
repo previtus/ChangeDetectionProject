@@ -23,13 +23,13 @@ def main(args):
     evaluator = Evaluator.Evaluator(settings)
 
     #settings.run_name = settings.run_name + "AYRAN"
-    show = False
-    save = True
+    show = True
+    save = False
 
     #dataset.dataset
     model = ModelHandler.ModelHandler(settings, dataset)
 
-    model.model.train(show=show,save=save)
+    #model.model.train(show=show,save=save)
 
     # Model 2 ...
 
@@ -45,9 +45,9 @@ def main(args):
 
     # Next = train Resnet50 on the same dataset without the whole STRIP2 (to have some large Test images)
 
-    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_seresnext50-8batch_Augmentation1to1_ClassWeights1to3.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_seresnext50-8batch_Augmentation1to1_ClassWeights1to3.h5")
 
-    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual-noStrip2_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3.h5")
+    model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual-noStrip2_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3.h5")
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet101-8batch_Augmentation1to1_ClassWeights1to3.h5")
 
     # Senet154 crashed, 10hrs train + Imagenet weights + Data Aug 1:1 + Class weight 1:3
@@ -124,6 +124,7 @@ def main(args):
     #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")
 
     model.model.test(evaluator,show=show,save=save)
+    # TODO: model.model.test_on_specially_loaded_set(evaluator,show=show,save=save) # << LOAD just strip 2 here, use FCN to predict large areas
     #model.model.test_show_on_train_data_to_see_overfit(evaluator)
 
 if __name__ == '__main__':
