@@ -12,6 +12,7 @@ class Dataset(object):
         self.debugger = Debugger.Debugger(settings)
 
         Using_Model1b_Needing_Labels = False
+
         # just "_clean" is rubbis!
         # manual cleanup at 256_clean2 - 256x256 without overlap
         #dataset_variant = "256"
