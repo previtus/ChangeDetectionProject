@@ -17,6 +17,7 @@ class Dataset(object):
         # manual cleanup at 256_clean2 - 256x256 without overlap
         #dataset_variant = "256"
         dataset_variant = "256_cleanManual"
+        ###dataset_variant = "6368_special"
         #dataset_variant = "256"
         #dataset_variant = "112_clean"
         self.datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, self.dataLoader, dataset_variant)

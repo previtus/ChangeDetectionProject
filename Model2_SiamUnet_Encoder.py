@@ -70,6 +70,7 @@ class Model2_SiamUnet_Encoder(object):
         #custom_weights_file = "/scratch/ruzicka/python_projects_large/AerialNet_VariousTasks/model_UNet-Resnet34_DSM_in01_95percOfTrain_8batch_100ep_dsm01proper.h5"
 
         resolution_of_input = self.dataset.datasetInstance.IMAGE_RESOLUTION
+        resolution_of_input = None
         self.model = self.create_model(backbone=BACKBONE, custom_weights_file=custom_weights_file, input_size = resolution_of_input, channels = 3)
         self.model.summary()
 
@@ -402,7 +403,112 @@ class Model2_SiamUnet_Encoder(object):
 
 
     def test_show_on_train_data_to_see_overfit(self, evaluator):
-        print("Debug, showing performance on Train data!")
+        print("Test: Debug, showing performance on Train data!")
+
+    def test_on_specially_loaded_set(self, evaluator, show = True, save = False):
+        print("Test: Debug, showing performance on other loaded data!")
+
+        path_to_image_left = "/home/pf/pfstaff/projects/ruzicka/TiledDataset_6368x6368px_large/2012_strip2_6368tiles/strip2-2012_0.PNG"
+        path_to_image_right = "/home/pf/pfstaff/projects/ruzicka/TiledDataset_6368x6368px_large/2015_strip2_6368tiles/strip2-2015_0.PNG"
+
+        from skimage import io
+        def load_raster_image(filename):
+            img = io.imread(filename)
+            arr = np.asarray(img)
+            return arr
+
+        image_left = load_raster_image(path_to_image_left)
+        image_right = load_raster_image(path_to_image_right)
+
+        # show just small section of it ...
+        def crop_center(img, cropx, cropy):
+            y, x, ch = img.shape
+            startx = x // 2 - (cropx // 2)
+            starty = y // 2 - (cropy // 2)
+            return img[starty:starty + cropy, startx:startx + cropx, :]
+
+        SMALLER_SIZE = 2048
+        image_left = crop_center(image_left, SMALLER_SIZE,SMALLER_SIZE)
+        image_right = crop_center(image_right, SMALLER_SIZE,SMALLER_SIZE)
+
+        print("We have images of resolution:", image_left.shape, image_right.shape)
+
+        test = [image_left], [image_right], [image_right]
+        import copy
+        foo = copy.deepcopy(test)
+        A = self.dataPreprocesser.process_dataset(test, foo, foo)
+        test = A[0]
+
+        """
+        # load data from folders
+        import DataLoader, Debugger, DatasetInstance_OurAerial
+        self.dataLoaderTMP = DataLoader.DataLoader(self.settings)
+        self.debugger = Debugger.Debugger(self.settings)
+        dataset_variant = "256_cleanManual"
+        dataset_variant = "6368_special"
+        self.datasetInstanceTMP= DatasetInstance_OurAerial.DatasetInstance_OurAerial(self.settings, self.dataLoaderTMP, dataset_variant)
+        self.dataPreprocesserTMP = DataPreprocesser.DataPreprocesser(self.settings, self.datasetInstanceTMP)
+        self.data, self.paths = self.datasetInstanceTMP.load_dataset() # this is a big file, even just loading takes a lot of time!
+
+        print("TMP Dataset loaded with", len(self.data[0]), "images.")
+        self.train, self.val, self.test = self.datasetInstanceTMP.split_train_val_test(self.data)
+        self.train_paths, self.val_paths, self.test_paths = self.datasetInstanceTMP.split_train_val_test(self.paths)
+        print("Has ", len(self.train[0]), "train, ", len(self.val[0]), "val, ", len(self.test[0]), "test, ")
+
+        # dataPreprocesser is the original one, while dataPreprocesserTMP is just the small test set dataset
+        # we want to use the original one for preprocessing of the images!
+        self.train, self.val, self.test = self.dataPreprocesser.process_dataset(self.train, self.val, self.test)
+        """
+
+        print("Finally we have", len(test[0]), "test images.")
+
+        print("Predicting now ...")
+        test_L, test_R, test_V = test
+        if test_L.shape[3] > 3:
+            test_L = test_L[:,:,:,1:4]
+            test_R = test_R[:,:,:,1:4]
+
+        # OUCH MEMORY DIES FOR LARGE IMAGES - we will need to tile it ...
+        predicted = self.model.predict(x=[test_L, test_R], batch_size=1)
+
+        if self.use_sigmoid_or_softmax == 'softmax':
+            predicted = predicted[:, :, :, 1]
+        else:
+            predicted = predicted.reshape(predicted.shape[:-1])
+
+        predicted = self.dataPreprocesser.postprocess_labels(predicted)
+        test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
+
+        #test_L = test_L / 255.0
+        #test_R = test_R / 255.0
+        #predicted = predicted / 255.0
+
+        print("test_L shape:", test_L.shape)
+        print("test_R shape:", test_R.shape)
+        print("predicted shape:", predicted.shape)
+
+        print("test_L max, min:", np.max(test_L), np.min(test_L))
+        print("test_R max, min:", np.max(test_R), np.min(test_R))
+        print("pred max, min:", np.max(predicted), np.min(predicted))
+
+        """
+        test_L shape: (1, 2048, 2048, 3)
+        test_R shape: (1, 2048, 2048, 3)
+        predicted shape: (1, 2048, 2048)
+        test_L max, min: 6.03318 -3.067333
+        test_R max, min: 4.3578467 -3.012093
+        pred max, min: 1.0 3.6731425e-09
+        """
+
+        off = 0
+        by = 1
+        by = min(by, len(test_L))
+        while off < len(predicted):
+            #self.debugger.viewQuadrupples(predicted, predicted, predicted, predicted, how_many=by, off=off, show=show, save=save)
+            self.debugger.viewTripples(test_L, test_R, predicted, how_many=by, off=off)
+            off += by
+
+        print("TODO: Save as images ...")
 
 
     def create_model(self, backbone='resnet34', custom_weights_file = "imagenet", input_size = 112, channels = 3):

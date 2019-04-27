@@ -30,6 +30,7 @@ class DatasetInstance_OurAerial(object):
         self.settings = settings
         self.dataLoader = dataLoader
         self.debugger = Debugger.Debugger(settings)
+        self.DEBUG_TURN_OFF_BALANCING = False
 
         self.variant = variant # 256 = 256x256, 112 = 112x112
 
@@ -119,6 +120,32 @@ class DatasetInstance_OurAerial(object):
                 # 2212 in total
                 self.split_train = 2000
                 self.split_val = 2100
+
+        elif self.variant == "6368_special":
+            self.local_setting_skip_rows = 0
+            self.local_setting_skip_columns = 0
+
+            self.dataset_version = "6368_special"
+            self.SUBSET = None #all
+            self.IMAGE_RESOLUTION = 6368
+            self.CHANNEL_NUMBER = 4
+            self.LOAD_BATCH_INCREMENT = 20 # from 14 images
+
+            self.bigger_than_percent = 0.0  # doesn't make much sense here!
+            self.smaller_than_percent = 0.0  # doesn't make much sense here!
+
+            self.default_raster_shape = (6368,6368,4)
+            self.default_vector_shape = (6368,6368)
+
+            # decent dataset:
+            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL0.0_0.0_sel13_res6368x6368.h5"
+
+            # spliting <14>
+            # 0 train, 0 val, 14 test
+            self.split_train = 0
+            self.split_val = 0
+            self.DEBUG_TURN_OFF_BALANCING = True
+
 
     def split_train_val_test(self, data):
         lefts, rights, labels = data
@@ -234,7 +261,10 @@ class DatasetInstance_OurAerial(object):
                 for path in tqdm( V ):
                     labels_batch.append(self.load_vector_image(path))
 
-                new_lefts_paths, new_rights_paths, new_labels_paths = self.balance_data(labels_batch, L, R, V)
+                if not self.DEBUG_TURN_OFF_BALANCING:
+                    new_lefts_paths, new_rights_paths, new_labels_paths = self.balance_data(labels_batch, L, R, V)
+                else:
+                    new_lefts_paths, new_rights_paths, new_labels_paths = L, R, V
 
                 #print("Checking paths from the batch:")
                 #self.debugger.check_paths(new_lefts_paths, new_rights_paths, new_labels_paths)
@@ -298,7 +328,6 @@ class DatasetInstance_OurAerial(object):
             rights = np.asarray(rights).astype('uint8')
             labels = np.asarray(labels).astype('float32')
 
-
             print("loading paths such as:", self.settings.large_file_folder + "saved_paths_2012_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle")
 
             name = str(self.SUBSET)+"_"+self.dataset_version+"BALVAL"+str(self.bigger_than_percent)+"_"+str(self.smaller_than_percent)+".pickle"
@@ -337,6 +366,37 @@ class DatasetInstance_OurAerial(object):
         data = [lefts, rights, labels]
         paths = [lefts_paths, rights_paths, labels_paths]
         return data, paths
+
+
+    def load_dataset_ONLY_PATHS_UPDATE_FROM_THE_OTHER_ONE_IF_NEEDED(self):
+        load_paths_from_folders = False  # TRUE To recompute the paths from folder
+
+        if load_paths_from_folders:
+            # Load paths
+            print("\nLoading all paths from input folders:")
+            lefts_paths, rights_paths, labels_paths = self.load_paths_from_folders()
+            self.dataLoader.save_paths(lefts_paths, self.settings.large_file_folder + "saved_paths_2012_"+self.dataset_version+"ALL.pickle")
+            self.dataLoader.save_paths(rights_paths, self.settings.large_file_folder + "saved_paths_2015_"+self.dataset_version+"ALL.pickle")
+            self.dataLoader.save_paths(labels_paths, self.settings.large_file_folder + "saved_paths_vectors_"+self.dataset_version+"ALL.pickle")
+        else:
+            lefts_paths = self.dataLoader.load_paths_from_pickle(
+                self.settings.large_file_folder + "saved_paths_2012_"+self.dataset_version+"ALL.pickle")
+            rights_paths = self.dataLoader.load_paths_from_pickle(
+                self.settings.large_file_folder + "saved_paths_2015_"+self.dataset_version+"ALL.pickle")
+            labels_paths = self.dataLoader.load_paths_from_pickle(
+                self.settings.large_file_folder + "saved_paths_vectors_"+self.dataset_version+"ALL.pickle")
+
+        print("We have", len(lefts_paths), "2012 images, ", lefts_paths[0:4])
+        print("We have", len(rights_paths), "2015 images, ", rights_paths[0:4])
+        print("We have", len(labels_paths), "vector images, ", labels_paths[0:4])
+
+        # Load images
+        lefts_paths = lefts_paths[0:self.SUBSET]
+        rights_paths = rights_paths[0:self.SUBSET]
+        labels_paths = labels_paths[0:self.SUBSET]
+
+        paths = [lefts_paths, rights_paths, labels_paths]
+        return paths
 
     ### Loading file paths manually :
 
@@ -462,6 +522,11 @@ class DatasetInstance_OurAerial(object):
                                 "vector_strip_8_a40p/",
                                 "vector_strip_9_a40p/"]
             paths_vectors = [start_dir + f for f in paths_vectors]
+
+        if  self.variant == "6368_special":
+            paths_2012 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_6368x6368px_large/2012_strip2_6368tiles/"]
+            paths_2015 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_6368x6368px_large/2015_strip2_6368tiles/"]
+            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_6368x6368px_large/2015_strip2_6368tiles/"] # hax
 
 
 
@@ -610,6 +675,10 @@ class DatasetInstance_OurAerial(object):
 
             total_tiles = len(png_files)
             columns = edge_tile + 1  # count the 0 too
+
+            if columns == 0:
+                columns = 1
+
             rows = int((total_tiles) / (columns))
 
             print("We have", columns, "columns x", rows, "rows = ", (columns * rows))
@@ -655,6 +724,8 @@ class DatasetInstance_OurAerial(object):
                     a=42
 
             columns = edge_tile + 1  # count the 0 too
+            if columns == 0:
+                columns = 1 # special case with small data
             rows = int((total_tiles) / (columns))
 
             print("We have", columns, "columns x", rows, "rows = ", (columns * rows))

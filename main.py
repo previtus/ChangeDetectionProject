@@ -123,8 +123,8 @@ def main(args):
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights_Take2.h5")
     #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")
 
-    model.model.test(evaluator,show=show,save=save)
-    # TODO: model.model.test_on_specially_loaded_set(evaluator,show=show,save=save) # << LOAD just strip 2 here, use FCN to predict large areas
+    #model.model.test(evaluator,show=show,save=save)
+    model.model.test_on_specially_loaded_set(evaluator,show=show,save=save) # << LOAD just strip 2 here, use FCN to predict large areas
     #model.model.test_show_on_train_data_to_see_overfit(evaluator)
 
 if __name__ == '__main__':
