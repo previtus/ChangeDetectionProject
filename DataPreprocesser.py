@@ -1,4 +1,3 @@
-from PIL import Image, ImageDraw
 import numpy as np
 
 class DataPreprocesser(object):
@@ -7,7 +6,7 @@ class DataPreprocesser(object):
     """
 
 
-    def __init__(self, settings, datasetInstance):
+    def __init__(self, settings, number_of_channels):
         self.settings = settings
 
         # storing information on how to normalize the data
@@ -17,7 +16,7 @@ class DataPreprocesser(object):
         self.zeroweighting_R_means_per_channel = []
         self.zeroweighting_R_stds_per_channel = []
 
-        self.datasetInstance = datasetInstance
+        self.number_of_channels = number_of_channels
 
     # to do:
     # channel wise normalization
@@ -39,7 +38,7 @@ class DataPreprocesser(object):
         # insp. https://sebastianraschka.com/Articles/2014_about_feature_scaling.html
         # standartized = (x_np - x_np.mean()) / x_np.std()
 
-        number_of_channels = self.datasetInstance.CHANNEL_NUMBER
+        number_of_channels = self.number_of_channels
 
         for channel in range(number_of_channels):
             l = lefts[:, :, :, channel].flatten()
@@ -85,7 +84,7 @@ class DataPreprocesser(object):
     def postprocess_images(self, images_L, images_R):
         # from normalized, zero weighted back to the original values
 
-        number_of_channels = self.datasetInstance.CHANNEL_NUMBER
+        number_of_channels = self.number_of_channels
 
         if number_of_channels == 4:
             range_for_just_channels_saved = [1, 2, 3]

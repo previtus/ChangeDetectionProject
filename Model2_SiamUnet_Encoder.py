@@ -69,7 +69,7 @@ class Model2_SiamUnet_Encoder(object):
         #weights from imagenet finetuned on aerial data specific task - will it work? will it break?
         #custom_weights_file = "/scratch/ruzicka/python_projects_large/AerialNet_VariousTasks/model_UNet-Resnet34_DSM_in01_95percOfTrain_8batch_100ep_dsm01proper.h5"
 
-        resolution_of_input = self.dataset.datasetInstance.IMAGE_RESOLUTION
+        #resolution_of_input = self.dataset.datasetInstance.IMAGE_RESOLUTION
         resolution_of_input = None
         self.model = self.create_model(backbone=BACKBONE, custom_weights_file=custom_weights_file, input_size = resolution_of_input, channels = 3)
         self.model.summary()

@@ -169,21 +169,23 @@ def build_siamese_unet(backbone, classes, skip_connection_layers,
                use_batchnorm=True,
                input_shape=(None, None, 3)):
 
-    print("Entered build_unet with arguments:")
-    print("backbone",backbone)
-    #print("---\n")
-    #backbone.summary()
-    #print("---\n")
+    verbose = False
+    if verbose:
+        print("Entered build_unet with arguments:")
+        print("backbone",backbone)
+        #print("---\n")
+        #backbone.summary()
+        #print("---\n")
 
 
-    print("classes",classes)
-    print("skip_connection_layers",skip_connection_layers)
-    print("decoder_filters",decoder_filters)
-    print("upsample_rates",upsample_rates)
-    print("n_upsample_blocks",n_upsample_blocks)
-    print("block_type",block_type)
-    print("activation",activation)
-    print("use_batchnorm",use_batchnorm)
+        print("classes",classes)
+        print("skip_connection_layers",skip_connection_layers)
+        print("decoder_filters",decoder_filters)
+        print("upsample_rates",upsample_rates)
+        print("n_upsample_blocks",n_upsample_blocks)
+        print("block_type",block_type)
+        print("activation",activation)
+        print("use_batchnorm",use_batchnorm)
 
     input = backbone.input
     x = backbone.output
@@ -192,13 +194,16 @@ def build_siamese_unet(backbone, classes, skip_connection_layers,
 
     skip_connection_idx = ([get_layer_number(backbone, l) if isinstance(l, str) else l
                                for l in skip_connection_layers])
-    print("skip_connection_idx", skip_connection_idx)
+    if verbose:
+        print("skip_connection_idx", skip_connection_idx)
 
     skip_connections = []
     for idx in skip_connection_idx:
         skip_connection = backbone.layers[idx].output
         skip_connections.append(skip_connection)
-    print("skip_connections layers", len(skip_connections), skip_connections)
+
+    if verbose:
+        print("skip_connections layers", len(skip_connections), skip_connections)
     #4 layers
     # 'stage4_unit1_relu1/Relu:0' shape=(?, 16, 16, 256)
     # 'stage3_unit1_relu1/Relu:0' shape=(?, 32, 32, 128)
@@ -207,8 +212,9 @@ def build_siamese_unet(backbone, classes, skip_connection_layers,
 
     siamese_backbone_model_encode = Model(inputs=[input], outputs=[x]+skip_connections)
 
-    print("siamese_model_encode.input", siamese_backbone_model_encode.input)
-    print("siamese_model_encode.output", siamese_backbone_model_encode.output) # x and the (now 4) skip connections
+    if verbose:
+        print("siamese_model_encode.input", siamese_backbone_model_encode.input)
+        print("siamese_model_encode.output", siamese_backbone_model_encode.output) # x and the (now 4) skip connections
 
     # Then merging
     input_a = Input(shape=(input_shape[0], input_shape[1], input_shape[2]))

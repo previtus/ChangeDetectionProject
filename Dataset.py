@@ -6,11 +6,19 @@ class Dataset(object):
     Will handle the dataset
     """
 
-    def __init__(self, settings):
+    def __init__(self, settings, init_source = 1):
         self.settings = settings
         self.dataLoader = DataLoader.DataLoader(settings)
         self.debugger = Debugger.Debugger(settings)
 
+        if init_source == 1:
+            self.init_from_stable_datasets()
+        else:
+            print("Init manually from data and labels")
+            self.datasetInstance = None
+            self.dataPreprocesser = None
+
+    def init_from_stable_datasets(self):
         Using_Model1b_Needing_Labels = False
 
         # just "_clean" is rubbis!
@@ -20,10 +28,11 @@ class Dataset(object):
         ###dataset_variant = "6368_special"
         #dataset_variant = "256"
         #dataset_variant = "112_clean"
-        self.datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, self.dataLoader, dataset_variant)
+        self.datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(self.settings, self.dataLoader, dataset_variant)
         #self.datasetInstance = DatasetInstance_ONERA.DatasetInstance_ONERA(settings, self)
 
-        self.dataPreprocesser = DataPreprocesser.DataPreprocesser(settings,self.datasetInstance)
+        number_of_channels = self.datasetInstance.CHANNEL_NUMBER
+        self.dataPreprocesser = DataPreprocesser.DataPreprocesser(self.settings,number_of_channels)
 
         self.data, self.paths = self.datasetInstance.load_dataset()
 
@@ -56,6 +65,26 @@ class Dataset(object):
         #self.train = self.dataPreprocesser.process_dataset_OLDSIMPLE(self.train)
         #self.val = self.dataPreprocesser.process_dataset_OLDSIMPLE(self.val)
         #self.test = self.dataPreprocesser.process_dataset_OLDSIMPLE(self.test)
+
+
+    def init_from_data_manually(self, train_data, train_paths, test_data, test_paths):
+        # all of these come as ~ [lefts, rights, labels] where lefts etc. are arrays
+        print("Dataset loaded with", len(train_data[0]), "images.")
+
+        # Shuffle
+        train_data = self.shuffle_thyself(train_data)
+
+        # Split into training, validation and test:
+        self.train = train_data
+        self.val = []
+        self.test = test_data
+
+        self.train_paths = train_paths
+        self.val_paths = []
+        self.test_paths = test_paths
+
+        # preprocess the dataset
+        self.train, self.val, self.test = self.dataPreprocesser.process_dataset(self.train, self.val, self.test)
 
     def shuffle_thyself(self, data):
         # !
