@@ -83,7 +83,7 @@ class Evaluator(object):
         if show:
            plt.show()
 
-    def calculate_recall_precision_accuracy(self, predictions, ground_truths, threshold = 0.5):
+    def calculate_recall_precision_accuracy(self, predictions, ground_truths, threshold = 0.5, need_f1=False):
         if len(predictions.shape) > 1:
             predictions_copy = np.array(predictions)
         else:
@@ -99,7 +99,9 @@ class Evaluator(object):
         sklearn_accuracy = sklearn.metrics.accuracy_score(arr_gts, arr_predictions)
         sklearn_precision = sklearn.metrics.precision_score(arr_gts, arr_predictions)
         sklearn_recall = sklearn.metrics.recall_score(arr_gts, arr_predictions)
-        sklearn_f1 = sklearn.metrics.f1_score(arr_gts, arr_predictions)
+        sklearn_f1 = 0.0
+        if need_f1:
+            sklearn_f1 = sklearn.metrics.f1_score(arr_gts, arr_predictions)
 
         return sklearn_recall, sklearn_precision, sklearn_accuracy, sklearn_f1
 
