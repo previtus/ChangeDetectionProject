@@ -1,6 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 import ActiveLearning.HelperFunctions as Helpers
+import Debugger
 
 from random import sample
 
@@ -50,6 +51,12 @@ class LargeDatasetHandler_AL(object):
         self.paths = [{},{},{}] # these should also be dictionaries so that you get path from the idx
         self.dataaug_descriptors = {}
 
+
+
+        # for balance stats
+        self.debugger = Debugger.Debugger(settings)
+
+    # Getters / Setters
     def report(self):
         lefts_paths, rights_paths, labels_paths = self.paths
 
@@ -61,6 +68,45 @@ class LargeDatasetHandler_AL(object):
     def get_number_of_samples(self):
         return self.N_of_data
 
+    def report_balance_of_class_labels(self, DEBUG_GET_IDX=False):
+        # we are interested in how many samples from "change" vs. "non-change" we have in our dataset
+
+        # for the one dataset we are using .....
+        bigger_than_percent = 3.0
+        smaller_than_percent = 1.0
+        IMAGE_RESOLUTION = 256
+
+
+        ## < Reused
+        array_of_number_of_change_pixels = []
+        for idx in self.labels_in_memory:
+            label_image = self.labels_in_memory[idx]
+            number_of_ones = np.count_nonzero(label_image.flatten()) # << loading takes care of this 0 vs non-zero
+            array_of_number_of_change_pixels.append(number_of_ones)
+
+        self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING") # hax
+        array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING") # hax
+
+        array_of_number_of_change_pixels = array_of_number_of_change_pixels / (
+                    IMAGE_RESOLUTION * IMAGE_RESOLUTION) * 100.0  # percentage of image changed
+
+        idx_examples_bigger = np.argwhere(array_of_number_of_change_pixels > bigger_than_percent)
+        idx_examples_smaller = np.argwhere(array_of_number_of_change_pixels <= smaller_than_percent)
+        ## >
+
+        N_change_class = len(idx_examples_bigger)
+        N_notchange_class = len(idx_examples_smaller)
+
+        # build new one mixing two IDX arrays
+        print("We have change : non change in this ratio - ", N_change_class, ":", N_notchange_class, " = ", (N_change_class / N_notchange_class))
+
+        if not DEBUG_GET_IDX:
+            return N_change_class, N_notchange_class
+        else:
+            as_ones_and_zeros = np.where(array_of_number_of_change_pixels > bigger_than_percent,1.0,0.0)
+            return N_change_class, N_notchange_class, as_ones_and_zeros, idx_examples_bigger, idx_examples_smaller
+
+    # Init
     def initialize_from_just_paths(self, paths):
         # in this case we are creating it for the first time, from just an array of paths
         lefts_paths, rights_paths, labels_paths = paths
@@ -85,18 +131,6 @@ class LargeDatasetHandler_AL(object):
         self.paths = lefts_paths_dictionary, rights_paths_dictionary, labels_paths_dictionary
 
         return 0
-
-    """
-    def initialize_from_another_object(self, data_in_memory, labels_in_memory, N_of_data, indices, paths, dataaug_descriptors, KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND_flag):
-        self.data_in_memory = data_in_memory
-        self.labels_in_memory = labels_in_memory
-        self.N_of_data = N_of_data
-        self.indices = indices
-        self.paths = paths
-        self.dataaug_descriptors = dataaug_descriptors
-        self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND = KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND_flag
-    """
-
 
     def keep_it_all_in_memory(self, optional_h5_path = None):
         self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND = "inmemory"
@@ -410,7 +444,7 @@ class LargeDatasetHandler_AL(object):
         return 0
     """
 
-def tmp_get_whole_dataset(in_memory=False):
+def tmp_get_whole_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
     from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
     import Settings
 
@@ -434,19 +468,22 @@ def tmp_get_whole_dataset(in_memory=False):
 
     datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, dataLoader, "256_cleanManual")
 
-    # ! this one automatically balances the data + deletes misfits in the resolution
-    data, paths = datasetInstance.load_dataset()
-    lefts_paths, rights_paths, labels_paths = paths
-    print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
+    if not TMP_WHOLE_UNBALANCED:
+        # ! this one automatically balances the data + deletes misfits in the resolution
+        data, paths = datasetInstance.load_dataset()
+        lefts_paths, rights_paths, labels_paths = paths
+        print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
 
-    # ! this one loads them all (CHECK: would some be deleted?)
-    # paths = datasetInstance.load_dataset_ONLY_PATHS_UPDATE_FROM_THE_OTHER_ONE_IF_NEEDED()
-    # lefts_paths, rights_paths, labels_paths = paths
-    # print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
+    else:
+        # ! this one loads them all (CHECK: would some be deleted?)
+        paths = datasetInstance.load_dataset_ONLY_PATHS_UPDATE_FROM_THE_OTHER_ONE_IF_NEEDED()
+        lefts_paths, rights_paths, labels_paths = paths
+        print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
 
     WholeDataset.initialize_from_just_paths(paths)
 
     if in_memory:
+        assert not TMP_WHOLE_UNBALANCED
         #WholeDataset.keep_it_all_in_memory()
         WholeDataset.keep_it_all_in_memory(h5_file)
 
