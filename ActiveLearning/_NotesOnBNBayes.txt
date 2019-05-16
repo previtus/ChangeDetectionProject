@@ -1,0 +1,31 @@
+Well ...
+
+https://github.com/icml-mcbn/mcbn/blob/master/code/mcbn/mcbn/models/model_bn.py
+
+Seems like:
+
+- for each small batch ...
+- load the stats of that batch (activation means and variances)
+- then predict
+- ... can get mean and variance (mozna ze variance se pak da pouzit jako uncertainty metrika???)
+
+
+From https://openreview.net/forum?id=BJlrSmbAZ&noteId=BJlrSmbAZ
+
+    For a total of T times:
+    - Sample a batch B from the training data D (with the same batch size M that was used during training).
+    - Update the BN units’ means and variances with B. This corresponds to sampling from the approximate predictive distribution q_theta(omega).
+    - Perform a forward pass to get the output y_t with this particular sample of omega.
+
+    From the T output samples y_t we estimate:
+    - The mean of the predictive distribution as the sample mean of y.
+    - The variance of the predictive distribution (for regression) as sum of the sample variance of y and variance from constant observation noise, tau^-1*I.
+
+
+
+
+//// [15.5. findings] small tests on BN
+- when turned into training phase behavior, then the prediction differs when we use differently sized batch
+    but for the same batch size the results remain the same
+    also when Keras is in it's testing phase behavior, then everything remains the same regardless of the batch size
+    (conclusion - will need to repeat what they did if we want to have uncertainty measure ...)

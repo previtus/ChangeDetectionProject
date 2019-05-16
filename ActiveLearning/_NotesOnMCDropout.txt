@@ -1,0 +1,29 @@
+from https://github.com/ceshine/recurrent-dropout-experiments/blob/master/yaringal_callbacks.py
+linked by https://towardsdatascience.com/learning-note-dropout-in-recurrent-networks-part-3-1b161d030cd4
+
+    def predict_stochastic(self, X, batch_size=128, verbose=0):
+        '''Generate output predictions for the input samples
+        batch by batch, using stochastic forward passes. If
+        dropout is used at training, during prediction network
+        units will be dropped at random as well. This procedure
+        can be used for MC dropout (see [ModelTest callbacks](callbacks.md)).
+        # Arguments
+            X: the input data, as a numpy array.
+            batch_size: integer.
+            verbose: verbosity mode, 0 or 1.
+        # Returns
+            A numpy array of predictions.
+        # References
+            - [Dropout: A simple way to prevent neural networks from overfitting](http://jmlr.org/papers/v15/srivastava14a.html)
+            - [Dropout as a Bayesian Approximation: Representing Model Uncertainty in Deep Learning](http://arxiv.org/abs/1506.02142)
+        '''
+        # https://stackoverflow.com/questions/44351054/keras-forward-pass-with-dropout
+        X = _standardize_input_data(
+            X, self.model.model._feed_input_names, self.model.model._feed_input_shapes,
+            check_batch_axis=False
+        )
+        if self._predict_stochastic is None:  # we only get self.model after init
+            self._predict_stochastic = K.function(
+                [self.model.layers[0].input, K.learning_phase()], [self.model.layers[-1].output])
+        return self.model._predict_loop(
+            self._predict_stochastic, X + [1.], batch_size, verbose)[:, 0]
