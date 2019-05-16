@@ -226,7 +226,7 @@ def build_siamese_unet(backbone, classes, skip_connection_layers,
     branch_a = branch_a_outputs[0]
     branch_b = branch_b_outputs[0]
 
-    x = Concatenate()([branch_a, branch_b]) # both inputs, in theory 8x8x512 + 8x8x512 -> 8x8x1024
+    x = Concatenate(name="concatHighLvlFeat")([branch_a, branch_b]) # both inputs, in theory 8x8x512 + 8x8x512 -> 8x8x1024
 
     skip_connection_outputs_a = branch_a_outputs[1:]
     skip_connection_outputs_b = branch_b_outputs[1:]

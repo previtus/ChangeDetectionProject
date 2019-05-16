@@ -19,6 +19,13 @@ def main(args):
     print(args)
 
     settings = Settings.Settings(args)
+
+    # We already did these
+    # ResNet50 and indices: 5, 2, 7, 3 (doing ? r.n.)
+    settings.TestDataset_Fold_Index = 999 # can be 0 to 9 (K-1)
+    settings.TestDataset_K_Folds = 10
+    assert settings.TestDataset_Fold_Index < settings.TestDataset_K_Folds
+
     dataset = Dataset.Dataset(settings)
     evaluator = Evaluator.Evaluator(settings)
 
@@ -29,7 +36,7 @@ def main(args):
     #dataset.dataset
     model = ModelHandler.ModelHandler(settings, dataset)
 
-    #model.model.train(show=show,save=save)
+    model.model.train(show=show,save=save)
 
     # Model 2 ...
 
@@ -43,11 +50,19 @@ def main(args):
     # - class weights changed ?
     # - ... any other special cool thing ...
 
+    # K-Fold_Crossval:
+    kfold_txt = "KFold_"+str(settings.TestDataset_Fold_Index)+"z"+str(settings.TestDataset_K_Folds)
+    print(kfold_txt)
+
+    # resnet 101 approx 5-6 hours (per fold - might be a bit less ...)
+    # resnet 50  approx 3-4 hours
+    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet50-8batch_Augmentation1to1_ClassWeights1to3_["+kfold_txt+"].h5")
+
     # Next = train Resnet50 on the same dataset without the whole STRIP2 (to have some large Test images)
 
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_seresnext50-8batch_Augmentation1to1_ClassWeights1to3.h5")
 
-    model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual-noStrip2_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3.h5")
+    #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual-noStrip2_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3.h5")
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet101-8batch_Augmentation1to1_ClassWeights1to3.h5")
 
     # Senet154 crashed, 10hrs train + Imagenet weights + Data Aug 1:1 + Class weight 1:3

@@ -1,5 +1,7 @@
 import DataLoader, DataPreprocesser, Debugger
 import DatasetInstance_OurAerial, DatasetInstance_ONERA
+import numpy as np
+
 
 class Dataset(object):
     """
@@ -42,12 +44,24 @@ class Dataset(object):
         print("Dataset loaded with", len(self.data[0]), "images.")
 
         # Shuffle
-        self.data = self.shuffle_thyself(self.data)
+        #self.data = self.shuffle_thyself(self.data)
 
         # Split into training, validation and test:
-        self.train, self.val, self.test = self.datasetInstance.split_train_val_test(self.data)
-        self.train_paths, self.val_paths, self.test_paths = self.datasetInstance.split_train_val_test(self.paths)
+
+        K = self.settings.TestDataset_K_Folds
+        test_fold = self.settings.TestDataset_Fold_Index
+        print("K-Fold crossval: [",test_fold,"from",K,"]")
+        self.train, self.val, self.test = self.datasetInstance.split_train_val_test_KFOLDCROSSVAL(self.data, test_fold=test_fold, K=K)
+        self.paths = np.asarray(self.paths)
+        self.train_paths, self.val_paths, self.test_paths = self.datasetInstance.split_train_val_test_KFOLDCROSSVAL(self.paths, test_fold=test_fold, K=K)
+
         print("Has ", len(self.train[0]), "train, ", len(self.val[0]), "val, ", len(self.test[0]), "test, ")
+        #print("Has ", len(self.train_paths[0]), "train_paths, ", len(self.val_paths[0]), "val_paths, ", len(self.test_paths[0]), "test_paths, ")
+
+        #print("Revert...")
+        #self.train, self.val, self.test = self.datasetInstance.split_train_val_test(self.data)
+        #self.train_paths, self.val_paths, self.test_paths = self.datasetInstance.split_train_val_test(self.paths)
+        #print("Has ", len(self.train[0]), "train, ", len(self.val[0]), "val, ", len(self.test[0]), "test, ")
 
         # preprocess the dataset
         self.train, self.val, self.test = self.dataPreprocesser.process_dataset(self.train, self.val, self.test)

@@ -43,24 +43,27 @@ class Evaluator(object):
         ys_recalls = []
         ys_precisions = []
         ys_accuracies = []
+        ys_f1s= []
         for thr in range_values: #np.arange(0.0,1.0,0.01):
             xs.append(thr)
             print("threshold=",thr)
             #_, recall, precision, accuracy = self.calculate_metrics(predicted, labels, threshold=thr)
             if "NoChange" in title_txt:
                 print("from the position of NoChange class instead...")
-                recall, precision, accuracy, f1 = self.calculate_recall_precision_accuracy_NOCHANGECLASS(predicted, labels, threshold=thr)
+                recall, precision, accuracy, f1 = self.calculate_recall_precision_accuracy_NOCHANGECLASS(predicted, labels, threshold=thr, need_f1=True)
             else:
-                recall, precision, accuracy, f1 = self.calculate_recall_precision_accuracy(predicted, labels, threshold=thr)
+                recall, precision, accuracy, f1 = self.calculate_recall_precision_accuracy(predicted, labels, threshold=thr, need_f1=True)
 
             ys_recalls.append(recall)
             ys_precisions.append(precision)
             ys_accuracies.append(accuracy)
+            ys_f1s.append(f1)
 
         print("xs", len(xs), xs)
         print("ys_recalls", len(ys_recalls), ys_recalls)
         print("ys_precisions", len(ys_precisions), ys_precisions)
         print("ys_accuracies", len(ys_accuracies), ys_accuracies)
+        print("ys_f1s", len(ys_f1s), ys_f1s)
 
         if title_txt == "":
             plt.title('Changing the threshold values')
@@ -72,6 +75,7 @@ class Evaluator(object):
         plt.plot(xs, ys_recalls, '-o', label="Recall")
         plt.plot(xs, ys_precisions, '-o', label="Precision")
         plt.plot(xs, ys_accuracies, '-o', label="Accuracy")
+        plt.plot(xs, ys_f1s, '-o', label="f1")
         plt.legend()
 
         plt.ylim(0.0, 1.0)
@@ -82,6 +86,25 @@ class Evaluator(object):
 
         if show:
            plt.show()
+
+        plt.close()
+
+    def calculate_f1(self, predictions, ground_truths, threshold = 0.5):
+        if len(predictions.shape) > 1:
+            predictions_copy = np.array(predictions)
+        else:
+            predictions_copy = np.array([predictions])
+
+        for image in predictions_copy:
+            image[image >= threshold] = 1
+            image[image < threshold] = 0
+
+        arr_predictions = predictions_copy.flatten()
+        arr_gts = ground_truths.flatten()
+
+        sklearn_f1 = sklearn.metrics.f1_score(arr_gts, arr_predictions)
+
+        return sklearn_f1
 
     def calculate_recall_precision_accuracy(self, predictions, ground_truths, threshold = 0.5, need_f1=False):
         if len(predictions.shape) > 1:
@@ -303,8 +326,9 @@ class Evaluator(object):
         return predictions_thresholded, recall, precision, accuracy
 
     # select thr which maximizes the f1 score
-    def metrics_autothr_f1_max(self, predictions, ground_truths, verbose=2):
-        range_values = np.arange(0.0, 1.0, 0.01)
+    def metrics_autothr_f1_max(self, predictions, ground_truths, jump_by = 0.1):
+        # force it selecting something 'sensible' for the threshold ...
+        range_values = np.arange(0.1, 0.9, jump_by)
 
         xs = []
         ys_recalls = []
@@ -313,17 +337,18 @@ class Evaluator(object):
         ys_f1s = []
         for thr in range_values:
             xs.append(thr)
-            print("threshold=", thr)
+            print("auto threshold=", thr)
 
-            recall, precision, accuracy, f1 = self.calculate_recall_precision_accuracy(predictions, ground_truths, threshold=thr)
-
-            ys_recalls.append(recall)
-            ys_precisions.append(precision)
-            ys_accuracies.append(accuracy)
+            f1 = self.calculate_f1(predictions, ground_truths, threshold=thr)
             ys_f1s.append(f1)
 
         max_f1_idx = np.argmax(ys_f1s)
-        selected_thr = xs[max_f1_idx]
+        best_thr = xs[max_f1_idx]
 
-        print("Selecting threshold as", selected_thr, "as it maximizes the f1 score getting", ys_f1s[max_f1_idx],
-              "(other scores are: recall", ys_recalls[max_f1_idx], ", precision", ys_precisions[max_f1_idx], ", acc", ys_accuracies[max_f1_idx], ")")
+        selected_recall, selected_precision, selected_accuracy, _ = self.calculate_recall_precision_accuracy(predictions, ground_truths,threshold=thr, need_f1=False)
+        selected_f1 = ys_f1s[max_f1_idx]
+
+        print("Selecting threshold as", best_thr, "as it maximizes the f1 score getting", selected_f1,
+              "(other scores are: recall", selected_recall, ", precision", selected_precision, ", acc", selected_accuracy, ")")
+
+        return best_thr, selected_recall, selected_precision, selected_accuracy, selected_f1

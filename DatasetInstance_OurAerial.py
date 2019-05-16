@@ -147,6 +147,55 @@ class DatasetInstance_OurAerial(object):
             self.DEBUG_TURN_OFF_BALANCING = True
 
 
+
+    def split_train_val_test_KFOLDCROSSVAL(self, data, test_fold = 0, K = 4):
+        lefts, rights, labels = data
+
+        # now we would like the val jump around the dataset (and the rest can be still separated into train - val
+
+        # split [0 - end] into K folds, one as a test the rest as a train (alt. val, but that can be 0)
+        N = len(lefts)
+        jump_by = int(N / K)
+
+        test_L = np.empty(((0,)+lefts.shape[1:]), lefts.dtype)
+        train_L = np.empty(((0,)+lefts.shape[1:]), lefts.dtype)
+        test_R = np.empty(((0,) + rights.shape[1:]), rights.dtype)
+        train_R = np.empty(((0,) + rights.shape[1:]), rights.dtype)
+        test_V = np.empty(((0,) + labels.shape[1:]), labels.dtype)
+        train_V = np.empty(((0,) + labels.shape[1:]), labels.dtype)
+
+        data_start = 0
+        for fold_index in range(K):
+            data_until = data_start + jump_by
+            if data_until > N:
+                data_until = N
+
+            fold_L = lefts[data_start:data_until]
+            fold_R = rights[data_start:data_until]
+            fold_V = labels[data_start:data_until]
+
+            #print("fold_L.shape", fold_L.shape)
+
+            if fold_index == test_fold:
+                # add to test set
+                test_L = np.append(test_L, fold_L, 0)
+                test_R = np.append(test_R, fold_R, 0)
+                test_V = np.append(test_V, fold_V, 0)
+            else:
+                # add to train set
+                train_L = np.append(train_L, fold_L, 0)
+                train_R = np.append(train_R, fold_R, 0)
+                train_V = np.append(train_V, fold_V, 0)
+
+            data_start += jump_by
+
+        train = [train_L, train_R, train_V]
+        test = [test_L, test_R, test_V]
+        val = test # hmmm
+
+        return train, val, test
+
+
     def split_train_val_test(self, data):
         lefts, rights, labels = data
 

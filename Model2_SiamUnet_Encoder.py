@@ -63,7 +63,6 @@ class Model2_SiamUnet_Encoder(object):
         BACKBONE = 'resnet34'
         BACKBONE = 'resnet50' #batch 16
         #BACKBONE = 'resnet101' #batch 8
-        #BACKBONE = 'seresnext50' #trying batch 16 as well
         custom_weights_file = "imagenet"
 
         #weights from imagenet finetuned on aerial data specific task - will it work? will it break?
@@ -104,8 +103,6 @@ class Model2_SiamUnet_Encoder(object):
         self.debugger.explore_set_stats(train_R)
         print("label images (train)")
         self.debugger.explore_set_stats(train_V)
-
-        added_plots = []
 
         from albumentations.core.transforms_interface import DualTransform
         class RandomRotate90x1(DualTransform):
@@ -188,16 +185,16 @@ class Model2_SiamUnet_Encoder(object):
                     del augmented1
                     del augmented2
 
-                if False:
-                    # for sake of showing:
-                    aug_lefts_tmp, aug_rights_tmp = self.dataPreprocesser.postprocess_images(np.asarray(aug_lefts), np.asarray(aug_rights))
+            if False:
+                # for sake of showing:
+                aug_lefts_tmp, aug_rights_tmp = self.dataPreprocesser.postprocess_images(np.asarray(aug_lefts), np.asarray(aug_rights))
 
-                    #self.debugger.viewTripples(aug_lefts, aug_rights, aug_ys)
-                    by = 5
-                    off = i * by
-                    while off < len(aug_lefts):
-                        self.debugger.viewTripples(aug_lefts_tmp, aug_rights_tmp, aug_ys, how_many=by, off=off)
-                        off += by
+                #self.debugger.viewTripples(aug_lefts, aug_rights, aug_ys)
+                by = 5
+                off = i * by
+                while off < len(aug_lefts):
+                    self.debugger.viewTripples(aug_lefts_tmp, aug_rights_tmp, aug_ys, how_many=by, off=off)
+                    off += by
 
             aug_lefts = np.asarray(aug_lefts)
             aug_rights = np.asarray(aug_rights)
@@ -337,8 +334,8 @@ class Model2_SiamUnet_Encoder(object):
             print("indices:", misclassified_indices)
             misclassified_indices = misclassified_indices[0]
 
-            for ind in misclassified_indices:
-                print("idx", ind, ":", predicted_classlabels[ind]," != ",test_classlabels[ind])
+            #for ind in misclassified_indices:
+            #    print("idx", ind, ":", predicted_classlabels[ind]," != ",test_classlabels[ind])
 
 
         print("MASK EVALUATION")
@@ -370,7 +367,7 @@ class Model2_SiamUnet_Encoder(object):
         print("predicted images (test)")
         self.debugger.explore_set_stats(predicted)
 
-
+        """
         if Tile_Based_Evaluation:
             print("Misclassified samples (in total", len(misclassified_indices),"):")
             if show:
@@ -381,7 +378,7 @@ class Model2_SiamUnet_Encoder(object):
                     #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
                     self.debugger.viewQuadrupples(test_L[misclassified_indices], test_R[misclassified_indices], test_V[misclassified_indices], predicted[misclassified_indices], how_many=by, off=off, show=show,save=save)
                     off += by
-
+        """
 
         if show:
             off = 0
@@ -398,7 +395,9 @@ class Model2_SiamUnet_Encoder(object):
             until_n = min(by*8, len(test_L))
             while off < until_n:
                 #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-                self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by, off=off, show=show,save=save, name=self.save_plot_path+"quad"+str(off))
+                kfold_txt = "KFold_" + str(self.settings.TestDataset_Fold_Index) + "z" + str(self.settings.TestDataset_K_Folds)
+
+                self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by, off=off, show=show,save=save, name=self.save_plot_path+"quad"+str(off)+kfold_txt)
                 off += by
 
 
