@@ -1,6 +1,6 @@
 # === Initialize sets - Unlabeled, Train and Test
 import keras
-from ActiveLearning.LargeDatasetHandler_AL import tmp_get_whole_dataset
+from ActiveLearning.LargeDatasetHandler_AL import get_balanced_dataset, get_unbalanced_dataset
 from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
 from ActiveLearning.ModelHandler_dataIndependent import ModelHandler_dataIndependent
 from ActiveLearning.DataPreprocesser_dataIndependent import DataPreprocesser_dataIndependent
@@ -14,30 +14,76 @@ from timeit import default_timer as timer
 #config.gpu_options.allow_growth=True
 #sess = tf.Session(config=config)
 
+""" TRAINING """
+# epochs = 10 + active_learning_iteration # hmmmmmmm regularize?
+epochs = 50  # the baseline model had 100 epochs btw ...
+#epochs = 10
+batch_size = 4  # 4 works nicely with the data for some reason ...
+# batch_size = 2 # so it survives as long as possible!
+augmentation = False
+# augmentation = True
+
+""" ACTIVE LEARNING """
+N_ITERATIONS = 10 # survives for 10
+# we have approx this ratio in our data 1072 : 81592
+# so if we sample all the changes first, we would get saturated at around 100 + it * 200 < it 5 ~
+# let's see what it does after it !?
+
+# Will take a lot of time ...
+# Predicting over the whole 80k samples - in each of the AL iteration, for each of the model
+
+INITIAL_SAMPLE_SIZE = 100
+TEST_SAMPLE_SIZE = 250
+ITERATION_SAMPLE_SIZE = 100
+
+#acquisition_function_mode = "Random"
+acquisition_function_mode = "Ensemble"
+ModelEnsemble_N = 3
+ENSEMBLE_tmp_how_many_from_random = 0 # not too many ... 1:4 seems like ok?
+
+
+
+#N_ITERATIONS = 3
+#epochs = 15
+
+#acquisition_function_mode = "Random"
+#ModelEnsemble_N = 1
+
+
+
+## Loop starts with a small train set (INITIAL_SAMPLE_SIZE)
+## then adds some number every iteration (ITERATION_SAMPLE_SIZE)
+## also every iteration tests on a selected test sample
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-TMP_WHOLE_UNBALANCED = True # Care!
 
-in_memory = False
-in_memory = True
-"""
-TempSetWithBalancedData = tmp_get_whole_dataset(in_memory)
-RemainingUnlabeledSet = tmp_get_whole_dataset(in_memory, TMP_WHOLE_UNBALANCED)
+#in_memory = False
+#in_memory = True # when it all fits its much faster
+#RemainingUnlabeledSet = get_balanced_dataset(in_memory)
+RemainingUnlabeledSet = get_unbalanced_dataset()
+
+
+# HAX
+print("-----------------------------")
+print("HAX: REMOVING SAMPLES SO WE DON'T GO MENTAL! (80k:1k ratio now 40k:1k ... still a big difference ...")
+REMOVE_SIZE = 40000
+#REMOVE_SIZE = 70000 # super HAX
+selected_indices = RemainingUnlabeledSet.sample_random_indice_subset_balanced_classes(REMOVE_SIZE, 0.0)
+removed_items = RemainingUnlabeledSet.pop_items(selected_indices)
+
+RemainingUnlabeledSet.report()
+print("-----------------------------")
+
+
+
+
 settings = RemainingUnlabeledSet.settings
-
 TestSet = LargeDatasetHandler_AL(settings, "inmemory")
-#selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(750) # EXTREMELY unbalanced
-#packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
-selected_indices = TempSetWithBalancedData.sample_random_indice_subset(500)
-packed_items = TempSetWithBalancedData.pop_items(selected_indices)
-"""
+#selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(TEST_SAMPLE_SIZE)
+selected_indices = RemainingUnlabeledSet.sample_random_indice_subset_balanced_classes(TEST_SAMPLE_SIZE, 0.5) # should be balanced
 
-RemainingUnlabeledSet = tmp_get_whole_dataset(in_memory)
-settings = RemainingUnlabeledSet.settings
-TestSet = LargeDatasetHandler_AL(settings, "inmemory")
-selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(250) #250
 packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
 
 TestSet.add_items(packed_items)
@@ -48,10 +94,16 @@ print("are we balanced in the test set?? Change:NoChange",N_change, N_nochange)
 
 TrainSet = LargeDatasetHandler_AL(settings, "inmemory")
 
+# Initial bump of data
+#selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(INITIAL_SAMPLE_SIZE)
+selected_indices = RemainingUnlabeledSet.sample_random_indice_subset_balanced_classes(INITIAL_SAMPLE_SIZE, 0.5) # possibly also should be balanced?
+
+packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
+TrainSet.add_items(packed_items)
+
 # === Model and preprocessors
 
-
-test_data, test_paths = TestSet.get_all_data_as_arrays()
+test_data, test_paths, _ = TestSet.get_all_data_as_arrays()
 
 dataPreprocesser = DataPreprocesser_dataIndependent(settings, number_of_channels=4)
 trainTestHandler = TrainTestHandler(settings)
@@ -70,7 +122,9 @@ Ns_changed = []
 Ns_nochanged = []
 
 #for active_learning_iteration in range(30): # 30*500 => 15k images
-for active_learning_iteration in range(1):
+for active_learning_iteration in range(N_ITERATIONS):
+    xs_number_of_data.append(TrainSet.get_number_of_samples())
+
     # survived to 0-5 = 6*500 = 3000 images (I think that then the RAM was filled ...)
     print("\n")
     print("==========================================================")
@@ -78,11 +132,6 @@ for active_learning_iteration in range(1):
 
     print("Active Learning iteration:", active_learning_iteration)
     start = timer()
-
-    selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(1000) # this can be 1:499 unbalanced!
-    print(selected_indices)
-    packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
-    TrainSet.add_items(packed_items)
 
     print("Unlabeled:")
     RemainingUnlabeledSet.report()
@@ -95,7 +144,7 @@ for active_learning_iteration in range(1):
     Ns_changed.append(N_change)
     Ns_nochanged.append(N_nochange)
 
-    train_data, train_paths = TrainSet.get_all_data_as_arrays()
+    train_data, train_paths, _ = TrainSet.get_all_data_as_arrays()
     print("fitting the preprocessor on this dataset")
 
     dataPreprocesser.fit_on_train(train_data)
@@ -112,9 +161,9 @@ for active_learning_iteration in range(1):
     #model = ModelHandler.model
 
     ModelEnsemble = []
-    ModelEnsemble_N = 5
-    Separate_Train_Eval__TrainAndSave = True
-    Separate_Train_Eval__TrainAndSave = False
+    Separate_Train_Eval__TrainAndSave = True # < we want to train new ones every iteration
+    TMP__DontSave = False
+    #Separate_Train_Eval__TrainAndSave = False # < this loads from the last interation (kept in case of mem errs)
 
     for i in range(ModelEnsemble_N):
         modelHandler = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
@@ -133,7 +182,6 @@ for active_learning_iteration in range(1):
         print(l1.name, np.array_equal(w1,w2))
     """
 
-
     #print("All layers (i hope that this gets inside the embedded model toooo...)")
     #for layer in model.layers:
     #    print(layer.name, layer.output_shape)
@@ -142,30 +190,24 @@ for active_learning_iteration in range(1):
     if Separate_Train_Eval__TrainAndSave:
         # === Train!:
         print("Now I would train ...")
-        #epochs = 10 + active_learning_iteration # hmmmmmmm regularize?
-        epochs = 50 # the baseline model had 100 epochs btw ...
-        #epochs = 10
-        ###epochs = 1 # debugs
-        #batch = 16 # batch 16 for resnet50
-        batch = 4 # 4 works nicely with the data for some reason ...
-        #batch = 2 # so it survives as long as possible!
-
-        augmentation = False
-        #augmentation = True
         for i in range(ModelEnsemble_N):
-            _, broken_flag = trainTestHandler.train(ModelEnsemble[i].model, processed_train, epochs, batch, augmentation = augmentation, DEBUG_POSTPROCESSER=dataPreprocesser)
+            print("Training model",i,"in the ensemble (out of",ModelEnsemble_N,"):")
+
+            _, broken_flag = trainTestHandler.train(ModelEnsemble[i].model, processed_train, epochs, batch_size, augmentation = augmentation, DEBUG_POSTPROCESSER=dataPreprocesser)
 
         if broken_flag:
             print("Got as far as until AL iteration:", active_learning_iteration, " ... now breaking")
             break
 
-        root = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/models_in_al/"
-        # now save these models
-        for i in range(ModelEnsemble_N):
-            modelHandler = ModelEnsemble[i]
-            modelHandler.save(root+"initTests_"+str(i))
+        if not TMP__DontSave:
+            root = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/models_in_al/"
+            # now save these models
+            for i in range(ModelEnsemble_N):
+                modelHandler = ModelEnsemble[i]
+                modelHandler.save(root+"initTests_"+str(i))
 
     else:
+        print("!!! Loading last saved models (with fixed paths, so this might break!)\n!!! BE SURE YOU WANT THIS.")
         # Load and then eval! (check stuff first ...)
         root = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/models_in_al/"
         for i in range(ModelEnsemble_N):
@@ -173,99 +215,215 @@ for active_learning_iteration in range(1):
             modelHandler.load(root+"initTests_"+str(i))
 
 
-    # have the models in ensemble make predictions
-    # Function EnsemblePrediction() maybe even in batches?
-    PredictionsEnsemble = []
-    for handler in ModelEnsemble:
-        model = handler.model
 
-        test_L, test_R, test_V = processed_test
+    print("Now I would test ...")
 
-        if test_L.shape[3] > 3:
-            # 3 channels only - rgb
-            test_L = test_L[:,:,:,1:4]
-            test_R = test_R[:,:,:,1:4]
-        # label also reshape
+    DEBUG_SAVE_ALL_THR_PLOTS = "iteration_"+str(active_learning_iteration).zfill(2)+"_debugThrOverview"
+    #DEBUG_SAVE_ALL_THR_PLOTS = None
+    auto_thr = True # automatically choose thr which maximizes f1 score
 
-        # only 5 images now!
-        subs = 20
-        test_L = test_L[0:subs]
-        test_R = test_R[0:subs]
+    """ a
+    from keras import backend as K
+    from keras.models import load_model
 
-        from keras.utils import to_categorical
-        test_V_cat = to_categorical(test_V)
+    ModelHandler.save("tmp.h5")
 
-        predicted = model.predict(x=[test_L, test_R], batch_size=4)
-        predicted = predicted[:, :, :, 1] # 2 channels of softmax with 2 classes is useless - use just one
+    K.clear_session()
+    K.set_learning_phase(1)
 
-        PredictionsEnsemble.append(predicted)
+    ModelHandler2 = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
+    ModelHandler2.load('tmp.h5')
+    model2 = ModelHandler2.model
+    """
+    ##### trainTestHandler.test_STOCHASTIC_TESTS(model, processed_test, evaluator, postprocessor=dataPreprocesser, auto_thr=auto_thr, DEBUG_SAVE_ALL_THR_PLOTS=DEBUG_SAVE_ALL_THR_PLOTS)
 
-    from scipy.stats import entropy
+    print("Selecting first model from the Ensemble for tests ...")
+    model = ModelEnsemble[0].model
 
-    predictions_N = len(PredictionsEnsemble[0])
-    for prediction_i in range(predictions_N):
-        #predictions_by_models = PredictionsEnsemble[:][prediction_i]
-        predictions_by_models = []
-        for model_i in range(ModelEnsemble_N):
-            predictions_by_models.append( PredictionsEnsemble[model_i][prediction_i] )
+    recall, precision, accuracy, f1, threshold = trainTestHandler.test(model, processed_test, evaluator, postprocessor=dataPreprocesser, auto_thr=auto_thr, DEBUG_SAVE_ALL_THR_PLOTS=DEBUG_SAVE_ALL_THR_PLOTS)
+    recalls.append(recall)
+    precisions.append(precision)
+    accuracies.append(accuracy)
+    f1s.append(f1)
+    thresholds.append(threshold)
 
-        # (N, 256, 256)
-        resolution = len(predictions_by_models[0])
-
-        entropies = []
-        variances = []
-
-        entropy_image = np.zeros((resolution, resolution))
-        variance_image = np.zeros((resolution, resolution))
-
-        for pixel_x in range(resolution):
-            for pixel_y in range(resolution):
-                pixels = []
-                for model_i in range(ModelEnsemble_N):
-                    pixels.append(PredictionsEnsemble[model_i][prediction_i][pixel_x][pixel_y])
-
-                if pixel_x < 10 and pixel_y < 2:
-                    print("Pixels:", pixels)
-                ent = entropy(pixels)
-                var = np.var(pixels, 0)
-                if pixel_x < 10 and pixel_y < 2:
-                    print("entropy:", ent, "variance:", var)
-
-                entropy_image[pixel_x][pixel_y] = ent
-                variance_image[pixel_x][pixel_y] = var
-
-                entropies.append(ent)
-                variances.append(var)
-
-        sum_ent = np.sum(entropies)
-        sum_var = np.sum(variances)
-        print("Sum entropy over whole image:", sum_ent) # min of this
-        print("Sum variance over whole image:", sum_var) # max of this
-
-        fig = plt.figure(figsize=(10, 8))
-        for i in range(ModelEnsemble_N):
-            img = predictions_by_models[i]
-            ax = fig.add_subplot(1, ModelEnsemble_N+2, i+1)
-            plt.imshow(img, cmap='gray')
-            ax.title.set_text('Model '+str(i))
-
-        ax = fig.add_subplot(1, ModelEnsemble_N+2, ModelEnsemble_N+1)
-        plt.imshow(entropy_image, cmap='gray')
-        ax.title.set_text('Entropy Viz ('+str(sum_ent)+')')
-
-        ax = fig.add_subplot(1, ModelEnsemble_N+2, ModelEnsemble_N+2)
-        plt.imshow(variance_image, cmap='gray')
-        ax.title.set_text('Variance Viz ('+str(sum_var)+')')
-
-        plt.show()
+    print("Now I would store/save the resulting model ...")
 
 
-        print(np.asarray(predictions_by_models).shape)
+    print("Add new samples as per AL paradigm ... acquisition_function_mode=",acquisition_function_mode)
 
+    # this is not necessary for Random ...
+    if acquisition_function_mode == "Ensemble":
 
-    lkjkljjjl
+        entropies_over_samples = []
+        variances_over_samples = []
+        overall_indices = np.asarray([]) # important to concat these correctly across batches
 
-    print("Now let's play with the ActiveLearning paradigm ...")
+        # BATCH THIS ENTIRE SEGMENT
+        PER_BATCH = 2048 # Depends on memory really ...
+
+        for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly'): # Yields a large batch sample
+            remaining_indices = batch[0]
+            remaining_data = batch[1]  # lefts and rights, no labels!
+            print("MegaBatch (",len(entropies_over_samples),"/",RemainingUnlabeledSet.N_of_data,") = indices from id", remaining_indices[0], "to id", remaining_indices[-1])
+            processed_remaining = dataPreprocesser.apply_on_a_set_nondestructively(remaining_data, no_labels=True)
+
+            # have the models in ensemble make predictions
+            # Function EnsemblePrediction() maybe even in batches?
+            PredictionsEnsemble = []
+
+            ##### potentially problematic -> too big for mem!
+            #### remaining_data, remaining_paths, remaining_indices = RemainingUnlabeledSet.get_all_data_as_arrays()
+            #### processed_remaining = dataPreprocesser.apply_on_a_set_nondestructively(remaining_data)
+
+            for nth, handler in enumerate(ModelEnsemble):
+                model = handler.model
+
+                test_L, test_R = processed_remaining
+
+                if test_L.shape[3] > 3:
+                    # 3 channels only - rgb
+                    test_L = test_L[:,:,:,1:4]
+                    test_R = test_R[:,:,:,1:4]
+                # label also reshape
+
+                # only 5 images now!
+                #subs = 100
+                #test_L = test_L[0:subs]
+                #test_R = test_R[0:subs]
+
+                print("Predicting for", nth, "model in the ensemble - for disagreement calculations")
+                predicted = model.predict(x=[test_L, test_R], batch_size=4)
+                predicted = predicted[:, :, :, 1] # 2 channels of softmax with 2 classes is useless - use just one
+
+                PredictionsEnsemble.append(predicted)
+
+            from scipy.stats import entropy
+
+            PredictionsEnsemble = np.asarray(PredictionsEnsemble) # [5, 894, 256, 256]
+            PredictionsEnsemble_By_Images = np.swapaxes(PredictionsEnsemble, 0, 1) # [894, 5, 256, 256]
+
+            resolution = len(PredictionsEnsemble[0][0]) # 256
+
+            # Multiprocessing ~~~ https://github.com/previtus/AttentionPipeline/blob/master/video_parser_v2/ThreadHerd.py
+            predictions_N = len(PredictionsEnsemble[0])
+            for prediction_i in range(predictions_N):
+                predictions = PredictionsEnsemble_By_Images[prediction_i] # 5 x 256x256
+
+                #start = timer()
+
+                entropy_image = None
+                sum_ent = 0
+
+                # incorrect calculation of entropy btw
+                ##entropy_image = np.apply_along_axis(arr=predictions, axis=0, func1d=entropy) # <<< The slow one ...
+                ##sum_ent = np.sum(entropy_image.flatten())
+
+                #end = timer()
+                #time = (end - start)
+                #print("Entropy "+str(time)+"s ("+str(time/60.0)+"min)") ## Entropy cca 0.011 min
+
+                #start = timer()
+
+                variance_image = np.var(predictions, axis=0)
+                sum_var = np.sum(variance_image.flatten())
+
+                #end = timer()
+                #time = (end - start)
+                #print("Variance "+str(time)+"s ("+str(time/60.0)+"min)") ## Variance cca 4.e-06
+
+                ##print("Sum entropy over whole image:", sum_ent) # min of this
+                #print("Sum variance over whole image:", sum_var) # max of this
+
+                do_viz = False
+                if do_viz:
+                    fig = plt.figure(figsize=(10, 8))
+                    for i in range(ModelEnsemble_N):
+                        img = predictions[i]
+                        ax = fig.add_subplot(1, ModelEnsemble_N+2, i+1)
+                        plt.imshow(img, cmap='gray')
+                        ax.title.set_text('Model '+str(i))
+
+                    ax = fig.add_subplot(1, ModelEnsemble_N+2, ModelEnsemble_N+1)
+                    plt.imshow(entropy_image, cmap='gray')
+                    ax.title.set_text('Entropy Viz ('+str(sum_ent)+')')
+
+                    ax = fig.add_subplot(1, ModelEnsemble_N+2, ModelEnsemble_N+2)
+                    plt.imshow(variance_image, cmap='gray')
+                    ax.title.set_text('Variance Viz ('+str(sum_var)+')')
+
+                    plt.show()
+
+                entropies_over_samples.append(sum_ent)
+                variances_over_samples.append(sum_var)
+
+            overall_indices  = np.append(overall_indices, remaining_indices)
+
+            #if len(entropies_over_samples) > 120:
+            #    break # few batches only
+
+    #print("debug ,,,")
+    #print("entropies_over_samples",entropies_over_samples)
+    #print("variances_over_samples",variances_over_samples)
+    #print("overall_indices",overall_indices)
+
+    """
+    #entropies_over_samples.sort() <- messes the rest
+    #variances_over_samples.sort()
+
+    plt.figure(figsize=(7, 7))  # w, h
+    plt.plot(entropies_over_samples, 'red', label="entropies_over_samples")
+    plt.plot(variances_over_samples, 'blue', label="variances_over_samples")
+    plt.legend()
+    #plt.ylim(0.0, 1.0)
+    plt.show() #### plotting entropy over the set
+    """
+
+    if acquisition_function_mode == "Random":
+        # note that in the case of Random, we don't need to calc the <variances_over_samples>
+        selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(ITERATION_SAMPLE_SIZE)
+
+        #print("random selected_indices", selected_indices)
+
+    if acquisition_function_mode == "Ensemble":
+        # indices 0 -> len(processed_remaining)
+        # real corresponding indices are in remaining_indices
+
+        Select_K = int( ITERATION_SAMPLE_SIZE - ENSEMBLE_tmp_how_many_from_random )
+        semisorted_indices = np.argpartition(variances_over_samples, -Select_K) # < ints?
+        selected_indices_A = semisorted_indices[-Select_K:]
+
+        if ENSEMBLE_tmp_how_many_from_random == 0:
+            selected_indices = selected_indices_A
+        else:
+
+            rest_indices = list(semisorted_indices[0:-Select_K])
+            # Probably we want to get some of the images with highest variance ~ disagreement
+            # and maybe we can also mix in some of the remaining images ...
+
+            #print("ensemble selected_indices_A", len(selected_indices_A) ,"=>", selected_indices_A)
+
+            from random import sample
+            selected_indices_B = sample(rest_indices, ENSEMBLE_tmp_how_many_from_random) # random sampling without replacement
+
+            #print("ensemble selected_indices_B", len(selected_indices_B),"=>",selected_indices_B)
+
+            selected_indices = np.append(selected_indices_A,selected_indices_B)
+
+        #print("ensemble (internal tmp) selected_indices", len(selected_indices),"=>",selected_indices)
+
+        true_selected_indices = []
+        for idx in selected_indices:
+            true_selected_indices.append( overall_indices[idx] )
+
+        #print("ensemble true_selected_indices", len(true_selected_indices),"=>",true_selected_indices)
+        selected_indices = true_selected_indices
+
+    # Visualize selected items? Maybe even with their scores
+
+    packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
+    TrainSet.add_items(packed_items)
+
 
     """ Experiment with the embedding of the model """
     """ Doesnt seem to work particularly well - dist is (prolly) not a good indicator for how much it changed
@@ -367,59 +525,36 @@ for active_learning_iteration in range(1):
     """
     """ End """
 
-    print("Now I would test ...")
 
-    DEBUG_SAVE_ALL_THR_PLOTS = "iteration_"+str(active_learning_iteration).zfill(2)+"_debugThrOverview"
-    #DEBUG_SAVE_ALL_THR_PLOTS = None
-    auto_thr = True # automatically choose thr which maximizes f1 score
+    for handler in ModelEnsemble:
+        model = handler.model
+        del model
+        del handler
 
-    """ a
-    from keras import backend as K
-    from keras.models import load_model
-
-    ModelHandler.save("tmp.h5")
-
-    K.clear_session()
-    K.set_learning_phase(1)
-
-    ModelHandler2 = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
-    ModelHandler2.load('tmp.h5')
-    model2 = ModelHandler2.model
-    """
-    ##### trainTestHandler.test_STOCHASTIC_TESTS(model, processed_test, evaluator, postprocessor=dataPreprocesser, auto_thr=auto_thr, DEBUG_SAVE_ALL_THR_PLOTS=DEBUG_SAVE_ALL_THR_PLOTS)
-
-
-    recall, precision, accuracy, f1, threshold = trainTestHandler.test(model, processed_test, evaluator, postprocessor=dataPreprocesser, auto_thr=auto_thr, DEBUG_SAVE_ALL_THR_PLOTS=DEBUG_SAVE_ALL_THR_PLOTS)
-    recalls.append(recall)
-    precisions.append(precision)
-    accuracies.append(accuracy)
-    f1s.append(f1)
-    xs_number_of_data.append(TrainSet.get_number_of_samples())
-    thresholds.append(threshold)
-
-    print("Now I would store/save the resulting model ...")
-
-    del model
     del train_data
     del processed_train
     del processed_test
     #for i in range(3): gc.collect()
-    keras.backend.clear_session() ### does this work???
+    keras.backend.clear_session()
 
     end = timer()
     time = (end - start)
     print("This iteration took "+str(time)+"s ("+str(time/60.0)+"min)")
-    # time it took over iterations ...
-    # 0 - 5 min
-    # 1 - 7.5 min
-    # ...
-    # 5 - 17 min
-    # 6 - 20 min
 
-
+    # Cheeky save per each iteration (so we can reconstruct old / broken plots)
+    statistics = thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged
+    statistics = np.asarray(statistics)
+    np.save("al_statistics.npy", statistics)
 
 #- AL outline, have two sets - TrainSet and UnlabeledSet and move data in between them... (always everything we have?)
 #2b.) Acquisition function to select subset of the RemainingUnlabeledSet -> move it to the TrainSet
+
+statistics = thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged
+statistics = np.asarray(statistics)
+np.save("al_statistics.npy", statistics)
+#####statistics = np.load("al_statistics.npy")
+
+thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged = statistics
 
 print("thresholds:", thresholds)
 
@@ -433,19 +568,21 @@ print("Ns_changed:", Ns_changed)
 print("Ns_nochanged:", Ns_nochanged)
 
 plt.figure(figsize=(7, 7)) # w, h
-plt.plot(xs_number_of_data, thresholds, 'black', label="thresholds")
+plt.plot(xs_number_of_data, thresholds, color='black', label="thresholds")
 
-plt.plot(xs_number_of_data, recalls, 'r', label="recalls")
-plt.plot(xs_number_of_data, precisions, 'b', label="precisions")
-plt.plot(xs_number_of_data, accuracies, 'g', label="accuracies")
-plt.plot(xs_number_of_data, f1s, 'orange', label="f1s")
+plt.plot(xs_number_of_data, recalls, color='red', marker='o', label="recalls")
+plt.plot(xs_number_of_data, precisions, color='blue', marker='o', label="precisions")
+plt.plot(xs_number_of_data, accuracies, color='green', marker='o', label="accuracies")
+plt.plot(xs_number_of_data, f1s, color='orange', marker='o', label="f1s")
 
-plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
+#plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
 
 plt.legend()
 plt.ylim(0.0, 1.0)
 
+plt.savefig("dbg_last_al_big_plot.png")
 plt.show()
+
 
 plt.figure(figsize=(7, 7)) # w, h
 
@@ -459,21 +596,9 @@ plt.ylabel('number of data samples')
 plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
 plt.legend((p1[0], p2[0]), ('Change', 'NoChange'))
 
+plt.savefig("dbg_last_al_balance_plot.png")
 plt.show()
 
+print("Ensemble tested on completely unbalanced!")
+print("Trying one with 1k to 40k balance and having it run properly - for few iterations at least -> later compare that between methods")
 
-
-print("This one is from the full dataset - extremely messy and unbalanced!!!")
-
-
-
-"""
-eeeee
-
-for e in range(3):
-    print("epoch %d" % e)
-    # mode > indices, dataonly, datalabels
-    for batch in TrainSet.generator_for_all_images(500, mode='datalabels'): # Yields a large batch sample
-        indices = batch[0]
-        print("indices from", indices[0], "to", indices[-1])
-"""

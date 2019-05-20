@@ -30,8 +30,8 @@ class ModelHandler_dataIndependent(object):
         #weights from imagenet finetuned on aerial data specific task - will it work? will it break?
         #custom_weights_file = "/scratch/ruzicka/python_projects_large/AerialNet_VariousTasks/model_UNet-Resnet34_DSM_in01_95percOfTrain_8batch_100ep_dsm01proper.h5"
 
-        #resolution_of_input = None
-        resolution_of_input = 256
+        resolution_of_input = None
+        #resolution_of_input = 256
         self.model = self.create_model(backbone=BACKBONE, custom_weights_file=custom_weights_file, input_size = resolution_of_input, channels = 3)
 
         if self.verbose >= 2:

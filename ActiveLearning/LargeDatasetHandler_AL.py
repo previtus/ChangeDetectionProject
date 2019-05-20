@@ -51,7 +51,8 @@ class LargeDatasetHandler_AL(object):
         self.paths = [{},{},{}] # these should also be dictionaries so that you get path from the idx
         self.dataaug_descriptors = {}
 
-
+        self.per_tile_class = {} # class "change" or "no-change" - in some cases we will precompute these!
+        self.has_per_tile_class_computed = False
 
         # for balance stats
         self.debugger = Debugger.Debugger(settings)
@@ -64,6 +65,9 @@ class LargeDatasetHandler_AL(object):
         print("\t[\paths] left:", len(lefts_paths), ", right:", len(rights_paths), ", labels:", len(labels_paths))
         print("\t[\data] in memory loaded:", len(self.data_in_memory))
         print("\t[\labels] in memory loaded:", len(self.labels_in_memory))
+        if self.has_per_tile_class_computed:
+            print("\t[\label classes] in memory loaded:", len(self.per_tile_class))
+            self.report_balance_from_tile_classes()
 
     def get_number_of_samples(self):
         return self.N_of_data
@@ -106,6 +110,62 @@ class LargeDatasetHandler_AL(object):
             as_ones_and_zeros = np.where(array_of_number_of_change_pixels > bigger_than_percent,1.0,0.0)
             return N_change_class, N_notchange_class, as_ones_and_zeros, idx_examples_bigger, idx_examples_smaller
 
+    def report_balance_from_tile_classes(self, get_indices = False):
+        assert self.has_per_tile_class_computed
+
+        change_indices = []
+        nochange_indices = []
+        ignored_indices = []
+
+        N_changes = 0 # > 3%
+        N_notchanges = 0 # <= 1%
+        N_ignored = 0 # in the middle of those
+
+        for key in self.per_tile_class:
+            value = self.per_tile_class[key]
+
+            if value == 0.0:
+                N_notchanges += 1
+
+                if get_indices:
+                    nochange_indices.append(key)
+            elif value == 1.0:
+                N_changes += 1
+
+                if get_indices:
+                    change_indices.append(key)
+            elif value == -1.0:
+                N_ignored += 1
+
+                if get_indices:
+                    ignored_indices.append(key)
+            else:
+                assert False # error in Matrix!
+
+
+        if get_indices:
+            return change_indices, nochange_indices, ignored_indices
+        else:
+            print("We have change : non change in this ratio - ", N_changes, ":", N_notchanges, " = ",
+                  (N_changes / N_notchanges))
+            print("PS: we also have ", N_ignored, "normally ignored samples ... ")
+
+    def classify_label_image(self, image):
+        bigger_than_percent = 3.0
+        smaller_than_percent = 1.0
+        IMAGE_RESOLUTION = 256
+
+        number_of_ones = np.count_nonzero(image.flatten())
+        number_of_change_pixels = number_of_ones / (IMAGE_RESOLUTION * IMAGE_RESOLUTION) * 100.0
+
+        if number_of_change_pixels <= smaller_than_percent:
+            return 0.0
+        if number_of_change_pixels > bigger_than_percent:
+            return 1.0
+        else:
+            # special case of ignored data samples! (if we want to include them we can add them to "no change" as well
+            return -1.0
+
     # Init
     def initialize_from_just_paths(self, paths):
         # in this case we are creating it for the first time, from just an array of paths
@@ -144,7 +204,7 @@ class LargeDatasetHandler_AL(object):
 
     # LOADERs ==========================================================================================================
 
-    def load_images_into_memory(self, paths, skip_labels=False):
+    def load_images_into_memory(self, paths, skip_labels=False, skip_data=False):
         # paths keeps three dictionaries!
         #self.data_in_memory[ IDX ] = corresponding data - Left and Right
         #self.labels_in_memory[ IDX ] = corresponding label - Label
@@ -155,13 +215,14 @@ class LargeDatasetHandler_AL(object):
 
         print("\nLoading whole set of raster images and labels:")
         lefts = {}
-        for idx in tqdm(lefts_paths):
-            path = lefts_paths[idx]
-            lefts[idx] = Helpers.load_raster_image(path)
         rights = {}
-        for idx in tqdm(rights_paths):
-            path = rights_paths[idx]
-            rights[idx] = Helpers.load_raster_image(path)
+        if not skip_data:
+            for idx in tqdm(lefts_paths):
+                path = lefts_paths[idx]
+                lefts[idx] = Helpers.load_raster_image(path)
+            for idx in tqdm(rights_paths):
+                path = rights_paths[idx]
+                rights[idx] = Helpers.load_raster_image(path)
         labels = {}
         if not skip_labels:
             for idx in tqdm(labels_paths):
@@ -211,7 +272,7 @@ class LargeDatasetHandler_AL(object):
 
         return selected_paths
 
-    def load_images_by_indices(self, selected_indices, skip_labels=False):
+    def load_images_by_indices(self, selected_indices, skip_labels=False, skip_data=False):
         # returns some subset of images of the dataset
         if self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND == "inmemory":
             selected_data = {}
@@ -224,8 +285,45 @@ class LargeDatasetHandler_AL(object):
             return selected_data, selected_labels # dicts
         else:
             selected_paths = self.paths_by_indices(selected_indices)
-            data_in_memory, labels_in_memory = self.load_images_into_memory(selected_paths, skip_labels=skip_labels) # dicts
+            data_in_memory, labels_in_memory = self.load_images_into_memory(selected_paths, skip_labels=skip_labels, skip_data=skip_data) # dicts
             return data_in_memory, labels_in_memory
+
+    def compute_per_tile_class_in_batches(self):
+        """
+        This function is designed with large datasets which won't normally fit in memory in mind - however sometimes we
+        still would like to access the labels in some compressed way (such as having a binary label).
+        (For example when wanting to sample randomly, but still maintaining a certain label ratio ~ enforced/simulated law of large numbers)
+
+        It will take long time to recompute. Consider saving and reusing a temp file ...
+        :return:
+        """
+        self.per_tile_class = {}
+
+        # goes through all ...
+        for batch in self.generator_for_all_images(2048, mode='labelsonly'):  # Yields a large batch sample
+            indices = batch[0]
+            print("indices from", indices[0], "to", indices[-1])
+
+            labels = batch[1]  # labels in dictionary
+
+            for key in labels:
+                label = labels[key]
+                #print("key", key, "=", label)
+
+                classification = self.classify_label_image(label)
+
+                self.per_tile_class[key] = classification
+
+            print("in self.per_tile_class",len(self.per_tile_class.keys()))
+
+        self.has_per_tile_class_computed = True
+
+    def save_per_tile_class(self, path='my_file.npy'):
+        np.save(path, self.per_tile_class)
+    def load_per_tile_class(self, path='my_file.npy'):
+        self.per_tile_class = np.load(path).item()
+        self.has_per_tile_class_computed = True
+
 
     # Data generator ===================================================================================================
 
@@ -246,7 +344,7 @@ class LargeDatasetHandler_AL(object):
                 end_of_selection = (i + 1) * BATCH_SIZE
                 end_of_selection = min(end_of_selection, len(self.indices))
                 selected_indices = list(self.indices[i * BATCH_SIZE:end_of_selection])
-                print(selected_indices)
+                #print(selected_indices)
 
                 if mode == 'indices':
                     data_batch = [selected_indices] # INDICES
@@ -263,6 +361,10 @@ class LargeDatasetHandler_AL(object):
 
                     data_batch = selected_indices, [lefts,rights]
 
+                elif mode == 'labelsonly':
+                    _, labels_in_memory = self.load_images_by_indices(selected_indices, skip_data=True)
+                    data_batch = selected_indices, labels_in_memory
+
                 elif mode == 'datalabels':
                     data_in_memory, labels_in_memory = self.load_images_by_indices(selected_indices)
                     # X is as [lefts, rights]
@@ -275,6 +377,7 @@ class LargeDatasetHandler_AL(object):
                         rights.append(data_in_memory[i][1])
                     labels = labels_in_memory
                     data_batch = selected_indices, [lefts, rights], labels
+
 
                 yield data_batch
 
@@ -320,7 +423,7 @@ class LargeDatasetHandler_AL(object):
         data = [lefts, rights, labels]
         paths = [lefts_paths, rights_paths, labels_paths]
 
-        return data, paths
+        return data, paths, self.indices
 
     # Sampling =========================================================================================================
 
@@ -330,9 +433,27 @@ class LargeDatasetHandler_AL(object):
         selected_indices = sample(self.indices, how_many) # random sampling without replacement
         return selected_indices
 
-    def sample_random_indice_subset_balanced_classes(self, how_many):
-        print("STILL NEEDS TO BE IMPLEMENTED")
-        assert False
+    def sample_random_indice_subset_balanced_classes(self, how_many, ratio = 0.1):
+        how_many_nochanges = int(how_many*(1.0-ratio))
+        how_many_changes = how_many - how_many_nochanges # always round
+
+        print("Sampling from the dataset in ratio=",ratio," which means",how_many_changes,"changes and",how_many_nochanges, "no-changes.")
+
+        change_indices, nochange_indices, ignored_indices = self.report_balance_from_tile_classes(get_indices=True)
+        # get indices of change and no_change class ...
+
+        selected_changes = []
+        selected_nochanges = []
+        if how_many_changes > 0:
+            selected_changes = sample(change_indices, how_many_changes) # random sampling without replacement
+        if how_many_nochanges > 0:
+            selected_nochanges = sample(nochange_indices, how_many_nochanges) # random sampling without replacement
+
+        # mix these two
+        selected_indices = np.append(selected_changes,selected_nochanges)
+        np.random.shuffle(selected_indices)
+
+        return selected_indices
 
 
     # Dataset splitting ================================================================================================
@@ -355,6 +476,7 @@ class LargeDatasetHandler_AL(object):
         popped_paths_lefts = {}
         popped_paths_rights = {}
         popped_paths_labels = {}
+        popped_per_tile_class = {}
 
         for idx in indices_to_pop:
             # pop it from current structures, add it to the new ones
@@ -362,6 +484,9 @@ class LargeDatasetHandler_AL(object):
             if self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND == "inmemory":
                 popped_data_in_memory[idx] = self.data_in_memory.pop(idx)
                 popped_labels_in_memory[idx] = self.labels_in_memory.pop(idx)
+
+            if self.has_per_tile_class_computed:
+                popped_per_tile_class[idx] = self.per_tile_class.pop(idx)
 
             popped_dataaug_descriptors[idx] = self.dataaug_descriptors.pop(idx)
             popped_paths_lefts[idx] = self.paths[0].pop(idx)
@@ -376,13 +501,14 @@ class LargeDatasetHandler_AL(object):
         self.N_of_data = new_N_of_data
 
         mem_flag = self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND
+        clas_flag = self.has_per_tile_class_computed
 
-        packed = popped_data_in_memory, popped_labels_in_memory, popped_dataaug_descriptors, popped_paths, indices_to_pop, mem_flag
+        packed = popped_data_in_memory, popped_labels_in_memory, popped_dataaug_descriptors, popped_paths, indices_to_pop, mem_flag, popped_per_tile_class, clas_flag
 
         return packed
 
     def add_items(self, packed_items):
-        added_data_in_memory, added_labels_in_memory, added_dataaug_descriptors, added_paths, indices_to_added, mem_flag = packed_items
+        added_data_in_memory, added_labels_in_memory, added_dataaug_descriptors, added_paths, indices_to_added, mem_flag, added_per_tile_class, clas_flag = packed_items
         added_paths_lefts, added_paths_rights, added_paths_labels = added_paths
 
         if self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND == "inmemory" and mem_flag == "ondemand":
@@ -395,6 +521,13 @@ class LargeDatasetHandler_AL(object):
             for idx in indices_to_added:
                 added_data_in_memory.pop(idx)
                 added_labels_in_memory.pop(idx)
+
+        if clas_flag and self.has_per_tile_class_computed:
+            for idx in indices_to_added:
+                self.per_tile_class[idx] = added_per_tile_class.pop(idx)
+        if not clas_flag and self.has_per_tile_class_computed:
+            print("Newly added items don't have class label! re-compute it")
+            assert False
 
         for idx in indices_to_added:
 
@@ -444,7 +577,7 @@ class LargeDatasetHandler_AL(object):
         return 0
     """
 
-def tmp_get_whole_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
+def get_balanced_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
     from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
     import Settings
 
@@ -486,6 +619,67 @@ def tmp_get_whole_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
         assert not TMP_WHOLE_UNBALANCED
         #WholeDataset.keep_it_all_in_memory()
         WholeDataset.keep_it_all_in_memory(h5_file)
+
+    npy_path = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_BALCLASS.npy"
+
+    I_WANT_TO_RECOMPUTE_THE_LABELS = False
+    if I_WANT_TO_RECOMPUTE_THE_LABELS:
+        assert False # don't want to mistakenly recompute these ...
+        WholeDataset.compute_per_tile_class_in_batches()
+        WholeDataset.save_per_tile_class(npy_path)
+
+    WholeDataset.load_per_tile_class(npy_path)
+
+    WholeDataset.report()
+
+    return WholeDataset
+
+
+
+def get_unbalanced_dataset(in_memory=False):
+    assert in_memory == False
+
+
+    from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
+    import Settings
+
+    # init structures
+    import mock
+    args = mock.Mock()
+    args.name = "test"
+
+
+    settings = Settings.Settings(args)
+    WholeDataset = LargeDatasetHandler_AL(settings)
+
+    # load paths of our favourite dataset!
+    import DataLoader, DataPreprocesser, Debugger
+    import DatasetInstance_OurAerial
+
+    dataLoader = DataLoader.DataLoader(settings)
+    debugger = Debugger.Debugger(settings)
+
+    datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, dataLoader, "256_cleanManual")
+
+    # ! this one loads them all (CHECK: would some be deleted?)
+    paths = datasetInstance.load_dataset_ONLY_PATHS_UPDATE_FROM_THE_OTHER_ONE_IF_NEEDED()
+    lefts_paths, rights_paths, labels_paths = paths
+    print("Paths: L,R,Y ", len(lefts_paths), len(rights_paths), len(labels_paths))
+
+    WholeDataset.initialize_from_just_paths(paths)
+
+    if in_memory:
+        WholeDataset.keep_it_all_in_memory()
+
+    npy_path = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_unBALCLASS.npy"
+
+    I_WANT_TO_RECOMPUTE_THE_LABELS = False
+    if I_WANT_TO_RECOMPUTE_THE_LABELS:
+        assert False # don't want to mistakenly recompute these ...
+        WholeDataset.compute_per_tile_class_in_batches()
+        WholeDataset.save_per_tile_class(npy_path)
+
+    WholeDataset.load_per_tile_class(npy_path)
 
     WholeDataset.report()
 
