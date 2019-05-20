@@ -60,9 +60,10 @@ class Model2_SiamUnet_Encoder(object):
         self.use_sigmoid_or_softmax = 'softmax'
         assert self.use_sigmoid_or_softmax == 'softmax'
 
-        BACKBONE = 'resnet34'
-        BACKBONE = 'resnet50' #batch 16
+        #BACKBONE = 'resnet34'
+        #BACKBONE = 'resnet50' #batch 16
         #BACKBONE = 'resnet101' #batch 8
+        BACKBONE =  settings.model_backend
         custom_weights_file = "imagenet"
 
         #weights from imagenet finetuned on aerial data specific task - will it work? will it break?
@@ -73,14 +74,14 @@ class Model2_SiamUnet_Encoder(object):
         self.model = self.create_model(backbone=BACKBONE, custom_weights_file=custom_weights_file, input_size = resolution_of_input, channels = 3)
         self.model.summary()
 
-        self.local_setting_batch_size = 8 #32
-        self.local_setting_epochs = 100 #100
+        self.local_setting_batch_size = settings.train_batch #8 #32
+        self.local_setting_epochs = settings.train_epochs #100
 
         self.train_data_augmentation = True
 
 
         # saving paths for plots ...
-        self.save_plot_path = "plots/"+self.settings.run_name+"_"
+        self.save_plot_path = "plots/"
 
     def train(self, show=True, save=False):
         print("Train")
@@ -231,8 +232,8 @@ class Model2_SiamUnet_Encoder(object):
 
         checkpoint = ModelCheckpoint("model2best_so_far_for_eastly_stops.h5", monitor='val_categorical_accuracy',
                                      verbose=1, save_best_only=True, mode='max')
-        callbacks = [checkpoint]  # should we prefer the best model instead?? maybe no, the val is pretty small
-        # callbacks = []
+        #callbacks = [checkpoint]  # should we prefer the best model instead?? maybe no, the val is pretty small
+        callbacks = []
 
         # Regular training:
         history = self.model.fit([train_L, train_R], train_V, batch_size=self.local_setting_batch_size,
@@ -253,7 +254,7 @@ class Model2_SiamUnet_Encoder(object):
         print(history.history)
 
 
-        self.debugger.nice_plot_history(history,added_plots, save=save, show=show, name=self.save_plot_path+"training")
+        self.debugger.nice_plot_history(history,added_plots, save=save, show=show, name=self.save_plot_path+self.settings.run_name+"_training")
 
     def save(self, path=""):
         if path == "":
@@ -269,7 +270,7 @@ class Model2_SiamUnet_Encoder(object):
             self.model.load_weights(path)
         print("Loaded model weights.")
 
-    def test(self, evaluator, show = True, save = False):
+    def test(self, evaluator, show = True, save = False, threshold_fineness = 0.1):
         print("Test")
 
         test_L, test_R, test_V = self.dataset.test
@@ -284,12 +285,13 @@ class Model2_SiamUnet_Encoder(object):
         else:
             test_V_cat = test_V.reshape(test_V.shape + (1,))
 
-        #predicted = self.model.predict(x=[test_L, test_R])
-        #metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0)
         predicted = self.model.predict(x=[test_L, test_R], batch_size=4)
         metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0, batch_size=4)
         metrics_info = self.model.metrics_names
         print(list(zip(metrics_info, metrics)))
+
+        kfold_txt = "MISSED_" + self.settings.model_backend + "_KFold_" + str(
+            self.settings.TestDataset_Fold_Index) + "z" + str(self.settings.TestDataset_K_Folds)
 
         if self.use_sigmoid_or_softmax == 'softmax':
             # with just 2 classes I can hax:
@@ -302,18 +304,23 @@ class Model2_SiamUnet_Encoder(object):
             # chop off that last dimension
             predicted = predicted.reshape(predicted.shape[:-1])
 
-        # undo preprocessing steps?
+        # undo preprocessing steps
         predicted = self.dataPreprocesser.postprocess_labels(predicted)
 
+        save_text_file = self.save_plot_path + kfold_txt + "_MASK_TXT.txt"
+        mask_best_thr, mask_recall, mask_precision, mask_accuracy, mask_f1 = evaluator.metrics_autothr_f1_max(predicted, test_V, jump_by = threshold_fineness, save_text_file=save_text_file)
+        mask_stats = mask_best_thr, mask_recall, mask_precision, mask_accuracy, mask_f1
+        tiles_stats = []
+        print("Threshold automatically chosen as", mask_best_thr)
 
         # Adding evaluation from the standpoint of each tile.
         Tile_Based_Evaluation = True
         if Tile_Based_Evaluation:
-            chosen_threshold = 0.01
+            chosen_threshold = mask_best_thr
             test_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(self.dataset.test[2])
 
             # This has to actually be thresholded before we calculate the tile label (we have to count occurance of 1s)
-            predictions_thresholded, _, _, _= evaluator.calculate_metrics(predicted, test_V, threshold=chosen_threshold)
+            predictions_thresholded, _, _, _, _= evaluator.calculate_metrics(predicted, test_V, threshold=chosen_threshold)
             predicted_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(predictions_thresholded)
 
             print(test_classlabels[0:20])
@@ -327,28 +334,26 @@ class Model2_SiamUnet_Encoder(object):
             # evaluator.try_all_thresholds(predicted_labels, test_class_Y, np.arange(0.0,1.0,0.01), title_txt="Labels (0/1) evaluated [Change Class]") #NoChange
 
             print("threshold=",chosen_threshold)
-            _, recall, precision, accuracy = evaluator.calculate_metrics(predicted_classlabels, test_classlabels, threshold=chosen_threshold) # thr arbitrary no? we have only 0/1 in here already
+            save_text_file = self.save_plot_path+kfold_txt+"_TILES_TXT.txt"
+            _, tiles_recall, tiles_precision, tiles_accuracy, tiles_f1 = evaluator.calculate_metrics(predicted_classlabels, test_classlabels, threshold=chosen_threshold, save_text_file=save_text_file) # thr arbitrary no? we have only 0/1 in here already
+            tiles_stats = mask_best_thr, tiles_recall, tiles_precision, tiles_accuracy, tiles_f1
 
             # Get indices of the misclassified samples
             misclassified_indices = np.where(predicted_classlabels != test_classlabels)
-            print("indices:", misclassified_indices)
             misclassified_indices = misclassified_indices[0]
 
-            #for ind in misclassified_indices:
-            #    print("idx", ind, ":", predicted_classlabels[ind]," != ",test_classlabels[ind])
+            text_to_save_missclassifieds = ""
+            print("misclassified_indices:", misclassified_indices)
+            text_to_save_missclassifieds += "misclassified_indices:"+str(misclassified_indices)+"\n"
+            for ind in misclassified_indices:
+                #print("idx", ind, ":", predicted_classlabels[ind]," != ",test_classlabels[ind])
+                text_to_save_missclassifieds += "idx "+ str(ind)+ ": " +str( predicted_classlabels[ind])+" != "+str(test_classlabels[ind])+"\n"
 
-
-        print("MASK EVALUATION")
-        #print("trying thresholds ...")
-        
-        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,1.0,0.05), title_txt="Masks (all pixels 0/1) evaluated [Change Class]", show=show,save=save, name=self.save_plot_path)
-        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,0.1,0.003), title_txt="Masks (all pixels 0/1) evaluated [Change Class]", show=show,save=save, name=self.save_plot_path)
-        #evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0,0.1,0.003), title_txt="Masks (all pixels 0/1) evaluated [NoChange Class]", show=show,save=save, name=self.save_plot_path)
-
-        # Evaluator
-        #evaluator.histogram_of_predictions(predicted)
-        print("threshold=0.01")
-        predictions_thresholded, recall, precision, accuracy = evaluator.calculate_metrics(predicted, test_V, threshold=0.01)
+            if save:
+                path = self.save_plot_path+"MissedIndices.txt"
+                file = open(path, "w")
+                file.write(text_to_save_missclassifieds)
+                file.close()
 
         test_L, test_R = self.dataPreprocesser.postprocess_images(test_L, test_R)
 
@@ -367,18 +372,19 @@ class Model2_SiamUnet_Encoder(object):
         print("predicted images (test)")
         self.debugger.explore_set_stats(predicted)
 
-        """
         if Tile_Based_Evaluation:
             print("Misclassified samples (in total", len(misclassified_indices),"):")
-            if show:
+            if save:
                 off = 0
-                by = 3
-                by = min(by, len(test_L[misclassified_indices]))
-                while off < len(predicted):
+                by = 4
+                by = min(by, len(misclassified_indices))
+                while off < len(misclassified_indices):
+
+                    by_rem = min(by, len(misclassified_indices)-off)
+
                     #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-                    self.debugger.viewQuadrupples(test_L[misclassified_indices], test_R[misclassified_indices], test_V[misclassified_indices], predicted[misclassified_indices], how_many=by, off=off, show=show,save=save)
+                    self.debugger.viewQuadrupples(test_L[misclassified_indices], test_R[misclassified_indices], test_V[misclassified_indices], predicted[misclassified_indices], how_many=by_rem, off=off, show=show,save=save, name=self.save_plot_path+kfold_txt+"quad"+str(off)+"_"+self.settings.run_name)
                     off += by
-        """
 
         if show:
             off = 0
@@ -395,14 +401,16 @@ class Model2_SiamUnet_Encoder(object):
             until_n = min(by*8, len(test_L))
             while off < until_n:
                 #self.debugger.viewTripples(test_L, test_R, test_V, how_many=4, off=off)
-                kfold_txt = "KFold_" + str(self.settings.TestDataset_Fold_Index) + "z" + str(self.settings.TestDataset_K_Folds)
+                kfold_txt = self.settings.model_backend+"_KFold_" + str(self.settings.TestDataset_Fold_Index) + "z" + str(self.settings.TestDataset_K_Folds)
+                by_rem = min(by, until_n - off)
 
-                self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by, off=off, show=show,save=save, name=self.save_plot_path+"quad"+str(off)+kfold_txt)
+                self.debugger.viewQuadrupples(test_L, test_R, test_V, predicted, how_many=by_rem, off=off, show=show,save=save, name=self.save_plot_path+kfold_txt+"quad"+str(off)+"_"+self.settings.run_name)
                 off += by
 
+        statistics = mask_stats, tiles_stats
+        return statistics
 
-    def test_show_on_train_data_to_see_overfit(self, evaluator):
-        print("Test: Debug, showing performance on Train data!")
+
 
     def test_on_specially_loaded_set(self, evaluator, show = True, save = False):
         print("Test: Debug, showing performance on other loaded data!")

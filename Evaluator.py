@@ -72,10 +72,11 @@ class Evaluator(object):
         plt.xlabel('threshold value')
         plt.ylabel('metrics')
 
-        plt.plot(xs, ys_recalls, '-o', label="Recall")
-        plt.plot(xs, ys_precisions, '-o', label="Precision")
-        plt.plot(xs, ys_accuracies, '-o', label="Accuracy")
-        plt.plot(xs, ys_f1s, '-o', label="f1")
+        plt.plot(xs, ys_recalls, color='red', marker='o', label="Recall")
+        plt.plot(xs, ys_precisions, color='blue', marker='o', label="Precision")
+        plt.plot(xs, ys_accuracies, color='green', marker='o', label="Accuracy")
+        plt.plot(xs, ys_f1s, color='orange', marker='o', label="f1")
+
         plt.legend()
 
         plt.ylim(0.0, 1.0)
@@ -106,7 +107,7 @@ class Evaluator(object):
 
         return sklearn_f1
 
-    def calculate_recall_precision_accuracy(self, predictions, ground_truths, threshold = 0.5, need_f1=False):
+    def calculate_recall_precision_accuracy(self, predictions, ground_truths, threshold = 0.5, need_f1=False, save_text_file=""):
         if len(predictions.shape) > 1:
             predictions_copy = np.array(predictions)
         else:
@@ -125,6 +126,15 @@ class Evaluator(object):
         sklearn_f1 = 0.0
         if need_f1:
             sklearn_f1 = sklearn.metrics.f1_score(arr_gts, arr_predictions)
+
+        if save_text_file is not "":
+            labels = ["no change", "change"]  # 0 no change, 1 change
+            text_report = str(sklearn.metrics.classification_report(arr_gts, arr_predictions, target_names=labels))
+            text_report += "\n"
+            text_report += str(sklearn.metrics.confusion_matrix(arr_gts, arr_predictions))
+            file = open(save_text_file, "w")
+            file.write(text_report)
+            file.close()
 
         return sklearn_recall, sklearn_precision, sklearn_accuracy, sklearn_f1
 
@@ -148,7 +158,7 @@ class Evaluator(object):
 
         return sklearn_recall, sklearn_precision, sklearn_accuracy, sklearn_f1
 
-    def calculate_metrics(self, predictions, ground_truths, threshold = 0.5, verbose=2):
+    def calculate_metrics(self, predictions, ground_truths, threshold = 0.5, verbose=2, save_text_file=""):
 
         flavour_text = ""
         if len(predictions.shape) > 1:
@@ -226,10 +236,10 @@ class Evaluator(object):
         IoU = float(TP) / float(TP + FP + FN)
         print("IoU", IoU)
 
-        sklearn_precision = sklearn.metrics.precision_score(arr_gts, arr_predictions)
-        sklearn_recall = sklearn.metrics.recall_score(arr_gts, arr_predictions)
-        print("sklearn_precision", sklearn_precision, "\t")
-        print("sklearn_recall", sklearn_recall, "\t")
+        #sklearn_precision = sklearn.metrics.precision_score(arr_gts, arr_predictions)
+        #sklearn_recall = sklearn.metrics.recall_score(arr_gts, arr_predictions)
+        #print("sklearn_precision", sklearn_precision, "\t")
+        #print("sklearn_recall", sklearn_recall, "\t")
 
         sklearn_f1 = sklearn.metrics.f1_score(arr_gts, arr_predictions)
         print("sklearn_f1", sklearn_f1, "\t")
@@ -241,10 +251,18 @@ class Evaluator(object):
             conf = sklearn.metrics.confusion_matrix(arr_gts, arr_predictions)
             print(conf)
 
+            if save_text_file is not "":
+                text_report = str(sklearn.metrics.classification_report(arr_gts, arr_predictions, target_names=labels))
+                text_report += "\n"
+                text_report += str(conf)
+                file = open(save_text_file, "w")
+                file.write(text_report)
+                file.close()
+
             print("=====================================================================================")
 
         predictions_thresholded = predictions_copy
-        return predictions_thresholded, recall, precision, accuracy
+        return predictions_thresholded, recall, precision, accuracy, sklearn_f1
 
 
     # chopped out some unnecessary things:
@@ -326,9 +344,9 @@ class Evaluator(object):
         return predictions_thresholded, recall, precision, accuracy
 
     # select thr which maximizes the f1 score
-    def metrics_autothr_f1_max(self, predictions, ground_truths, jump_by = 0.1):
+    def metrics_autothr_f1_max(self, predictions, ground_truths, jump_by = 0.1, save_text_file=""):
         # force it selecting something 'sensible' for the threshold ...
-        range_values = np.arange(0.1, 0.9, jump_by)
+        range_values = np.arange(0.0+jump_by, 1.0, jump_by)
 
         xs = []
         ys_recalls = []
@@ -345,7 +363,7 @@ class Evaluator(object):
         max_f1_idx = np.argmax(ys_f1s)
         best_thr = xs[max_f1_idx]
 
-        selected_recall, selected_precision, selected_accuracy, _ = self.calculate_recall_precision_accuracy(predictions, ground_truths,threshold=thr, need_f1=False)
+        selected_recall, selected_precision, selected_accuracy, _ = self.calculate_recall_precision_accuracy(predictions, ground_truths,threshold=thr, need_f1=False, save_text_file=save_text_file)
         selected_f1 = ys_f1s[max_f1_idx]
 
         print("Selecting threshold as", best_thr, "as it maximizes the f1 score getting", selected_f1,
