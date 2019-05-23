@@ -1,1 +1,32 @@
 python3 main.py -name MyRun
+
+
+# serverside runs on cluster:
+
+cd /cluster/home/ruzickav/.keras/models/
+wget https://github.com/qubvel/classification_models/releases/download/0.0.1/resnet34_imagenet_1000_no_top.h5
+
+module load python_gpu/3.6.4 hdf5/1.10.1 libpng/1.6.27
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/cluster/apps/python/3.6.4/lib64/
+echo $LD_LIBRARY_PATH #to check if it doesn't have mess in it
+		(does it have libhdf5.so.101, libpng16.so etc ... ?)
+		/cluster/apps/gcc-4.8.5/hdf5-1.10.1-z22q436tpg5j5mrbfk4xex6k2dg73tfo/lib:/cluster/apps/gcc-4.8.5/libpng-1.6.27-d6quyddan2eotsexesxufytusf27xxgz/lib:/cluster/apps/lsf/10.1/linux3.10-glibc2.17-x86_64/lib:/cluster/apps/python/3.6.4/lib64
+
+module load hdf5/1.10.1
+module load jpeg/9b
+
+pip3 install git+https://github.com/qubvel/segmentation_models --user
+pip3 install opencv-python --user
+pip3 install seaborn --user
+pip3 install tqdm --user
+pip3 install albumentations --user
+
+bsub (...)
+
+-I is interactive
+bsub -n 1 -W 4:00 -R "rusage[mem=32000, ngpus_excl_p=1]" python3 XYZ.py
+bsub -I -n 1 -W 4:00 -R "rusage[mem=32000, ngpus_excl_p=1]" python3 main.py -FOLD_I 9 -KFOLDS 10 -model_backend resnet101
+bsub -I -n 1 -W 4:00 -R "rusage[mem=32000, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python3 main.py -FOLD_I 9 -KFOLDS 10 -model_backend resnet101
+
+bjobs
+bbjobs
