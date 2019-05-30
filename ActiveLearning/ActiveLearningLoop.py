@@ -62,14 +62,20 @@ def main(args):
     acquisition_function_mode = args.AL_method #"Ensemble" / "Random"
     ModelEnsemble_N = int(args.AL_Ensemble_numofmodels)
 
-    ENSEMBLE_tmp_how_many_from_random = 0 # not too many ... 1:4 seems like ok?
+    ENSEMBLE_tmp_how_many_from_random = 0 # Hybridization
+
+
+    REMOVE_SIZE = int(args.DEBUG_remove_from_dataset)
 
 
     # LOCAL OVERRIDES:
 
     acquisition_function_mode = "Random"
     ModelEnsemble_N = 1
-
+    INITIAL_SAMPLE_SIZE = 600
+    N_ITERATIONS = 2
+    epochs = 35
+    REMOVE_SIZE = 0
 
     ## Loop starts with a small train set (INITIAL_SAMPLE_SIZE)
     ## then adds some number every iteration (ITERATION_SAMPLE_SIZE)
@@ -80,14 +86,13 @@ def main(args):
 
 
     #in_memory = False
-    #in_memory = True # when it all fits its much faster
-    #RemainingUnlabeledSet = get_balanced_dataset(in_memory)
-    RemainingUnlabeledSet = get_unbalanced_dataset()
+    in_memory = True # when it all fits its much faster
+    RemainingUnlabeledSet = get_balanced_dataset(in_memory)
+    #RemainingUnlabeledSet = get_unbalanced_dataset()
 
     # HAX
     print("-----------------------------")
     print("HAX: REMOVING SAMPLES SO WE DON'T GO MENTAL! (80k:1k ratio now 40k:1k ... still a big difference ...")
-    REMOVE_SIZE = 40000
     #REMOVE_SIZE = 70000 # super HAX
     selected_indices = RemainingUnlabeledSet.sample_random_indice_subset_balanced_classes(REMOVE_SIZE, 0.0)
     removed_items = RemainingUnlabeledSet.pop_items(selected_indices)
@@ -276,10 +281,13 @@ def main(args):
             # BATCH THIS ENTIRE SEGMENT
             PER_BATCH = 2048 # Depends on memory really ...
 
-            for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly'): # Yields a large batch sample
+            for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly_LOADBATCHFILES'): # Yields a large batch sample
                 remaining_indices = batch[0]
+                if len(remaining_indices) == 0:
+                    print("Everything from this batch was deleted (during loading batchfiles), skipping to the next one...")
+                    continue
                 remaining_data = batch[1]  # lefts and rights, no labels!
-                print("MegaBatch (",len(entropies_over_samples),"/",RemainingUnlabeledSet.N_of_data,") = indices from id", remaining_indices[0], "to id", remaining_indices[-1])
+                print("MegaBatch (",len(entropies_over_samples),"/",RemainingUnlabeledSet.N_of_data,") of size ", len(remaining_indices), " = indices from id", remaining_indices[0], "to id", remaining_indices[-1])
                 processed_remaining = dataPreprocesser.apply_on_a_set_nondestructively(remaining_data, no_labels=True)
 
                 # have the models in ensemble make predictions

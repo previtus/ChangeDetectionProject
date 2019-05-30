@@ -6,6 +6,7 @@ import Debugger
 from random import sample
 
 FOO = None
+BATCH_PRECOMP_FOLDER = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/entire_dataset_as_batch_chunks/"
 
 class LargeDatasetHandler_AL(object):
     """
@@ -48,6 +49,9 @@ class LargeDatasetHandler_AL(object):
 
         self.N_of_data = None
         self.indices = None # Array of indices, doesn't have to be sorted
+        self.original_indices = None # Array of indices as they were in their original order (which coincidentally was range(N))
+                                     # will be used as a reference to which indices have been removed ...
+                                     # Used only with the "RemainingUnlabeledSet" (which is never added items, just slowly poped)
         self.paths = [{},{},{}] # these should also be dictionaries so that you get path from the idx
         self.dataaug_descriptors = {}
 
@@ -181,6 +185,7 @@ class LargeDatasetHandler_AL(object):
 
         self.N_of_data = N
         self.indices = range(N)
+        self.original_indices = range(N)
 
         for idx in self.indices:
             lefts_paths_dictionary[idx] = lefts_paths[idx]
@@ -249,6 +254,12 @@ class LargeDatasetHandler_AL(object):
         rights = np.asarray(rights).astype('uint8')
         labels = np.asarray(labels).astype('float32')
 
+        """DONE ONCE
+        print("DEBUG MESSAGE: RE-SAVED THE h5 FILE AS SMALLER!")
+        hdf5_path_lower_size_I_believe = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256_SMALLER.h5"
+        Helpers.save_images_to_h5_DEFAULT_DATA_FORMAT(lefts, rights, labels, hdf5_path_lower_size_I_believe)
+        """
+
         for idx in range(len(lefts)):
             data_in_memory[idx] = lefts[idx], rights[idx]
         for idx in range(len(labels)):
@@ -288,6 +299,46 @@ class LargeDatasetHandler_AL(object):
             data_in_memory, labels_in_memory = self.load_images_into_memory(selected_paths, skip_labels=skip_labels, skip_data=skip_data) # dicts
             return data_in_memory, labels_in_memory
 
+    def load_chunk_of_images_from_h5_without_removed_ones(self, BATCH_ID, BATCH_FOLDER):
+        hdf5_path = BATCH_FOLDER + BATCH_ID
+        # this leads to a .h5 file
+
+        # Load:
+        data_in_memory = {}
+        labels_in_memory = {}
+        print("loading images from:", hdf5_path)
+
+        lefts, rights, labels, indices = Helpers.load_images_from_h5_with_wholeDataset_indices(hdf5_path)
+        lefts = np.asarray(lefts).astype('uint8')
+        rights = np.asarray(rights).astype('uint8')
+        labels = np.asarray(labels).astype('float32')
+        corresponding_indices = np.asarray(indices).astype('int')
+
+        print("Loaded (before removal):", len(lefts), "lefts, ", len(rights), "rights and", len(labels), "labels with",
+              len(corresponding_indices), "indices.")
+
+        print("debug: len(self.original_indices)", len(self.original_indices))
+        print("debug: len(self.indices)", len(self.indices))
+
+        # we don't care about the removed indices
+        # removed indices = all (original) indices - current indices
+        removed_indices = [idx for idx in self.original_indices if idx not in self.indices]
+        print("debug: len(removed_indices)", len(removed_indices))
+        remaining_indices = [idx for idx in corresponding_indices if idx not in removed_indices]
+        print("debug: len(remaining_indices)", len(remaining_indices))
+
+        for idx in range(len(lefts)):
+            if idx not in removed_indices:
+                orig_idx = corresponding_indices[idx]
+                data_in_memory[orig_idx] = lefts[idx], rights[idx] # reconstruct them as dictionaries
+
+        for idx in range(len(labels)):
+            if idx not in removed_indices:
+                orig_idx = corresponding_indices[idx]
+                labels_in_memory[orig_idx] = labels[idx]
+
+        return data_in_memory, labels_in_memory, remaining_indices
+
     def compute_per_tile_class_in_batches(self):
         """
         This function is designed with large datasets which won't normally fit in memory in mind - however sometimes we
@@ -324,16 +375,19 @@ class LargeDatasetHandler_AL(object):
         self.per_tile_class = np.load(path).item()
         self.has_per_tile_class_computed = True
 
-
     # Data generator ===================================================================================================
 
     # mode > indices, dataonly, datalabels
-    def generator_for_all_images(self, BATCH_SIZE=2048, mode='indices'):
+    def generator_for_all_images(self, BATCH_SIZE=2048, mode='indices', custom_indices_to_sample_from = None):
         # over time also returns all the images of the dataset, goes in the batches
         # see: https://github.com/keras-team/keras/issues/107
         LOOPING = 1
         while LOOPING: # repeat forever
-            loop_times = self.N_of_data / BATCH_SIZE
+            if custom_indices_to_sample_from is None:
+                loop_times = self.N_of_data / BATCH_SIZE
+            else:
+                loop_times = len(custom_indices_to_sample_from) / BATCH_SIZE
+
             int_loop_times = int(np.floor(loop_times)) + 1
             # +1 => last batch will be with less samples (1224 instead of the full 2048)
 
@@ -341,10 +395,17 @@ class LargeDatasetHandler_AL(object):
             for i in range(int_loop_times):
                 #if i % 125 == 0:
                 #    print("i = " + str(i))
-                end_of_selection = (i + 1) * BATCH_SIZE
-                end_of_selection = min(end_of_selection, len(self.indices))
-                selected_indices = list(self.indices[i * BATCH_SIZE:end_of_selection])
-                #print(selected_indices)
+                if custom_indices_to_sample_from is None:
+                    end_of_selection = (i + 1) * BATCH_SIZE
+                    end_of_selection = min(end_of_selection, len(self.indices))
+                    selected_indices = list(self.indices[i * BATCH_SIZE:end_of_selection])
+                    #print(selected_indices)
+                else:
+                    end_of_selection = (i + 1) * BATCH_SIZE
+                    end_of_selection = min(end_of_selection, len(custom_indices_to_sample_from))
+                    selected_indices = list(custom_indices_to_sample_from[i * BATCH_SIZE:end_of_selection])
+
+                BATCH_ID = str(i).zfill(3) + "_" + str(BATCH_SIZE) + "_from" + str(self.N_of_data) + ".h5"
 
                 if mode == 'indices':
                     data_batch = [selected_indices] # INDICES
@@ -361,6 +422,22 @@ class LargeDatasetHandler_AL(object):
 
                     data_batch = selected_indices, [lefts,rights]
 
+                elif mode == 'dataonly_LOADBATCHFILES':
+                    # In this case we load precomputed h5 files as batch chunks and then remove the items that were already removed from it.
+                    # (This might also result in completely empty batches in which case we should just go for another one)
+
+                    data_in_memory, labels_in_memory, corresponding_indices = self.load_chunk_of_images_from_h5_without_removed_ones(BATCH_ID,BATCH_PRECOMP_FOLDER)
+
+                    # X is as [lefts, rights]
+                    lefts = []
+                    rights = []
+                    for i in data_in_memory.keys():
+                        #for i in range(len(data_in_memory)):
+                        lefts.append(data_in_memory[i][0])
+                        rights.append(data_in_memory[i][1])
+
+                    data_batch = corresponding_indices, [lefts,rights] # ps: can contain less items that the requested batch size ...
+
                 elif mode == 'labelsonly':
                     _, labels_in_memory = self.load_images_by_indices(selected_indices, skip_data=True)
                     data_batch = selected_indices, labels_in_memory
@@ -375,9 +452,44 @@ class LargeDatasetHandler_AL(object):
                         #for i in range(len(data_in_memory)):
                         lefts.append(data_in_memory[i][0])
                         rights.append(data_in_memory[i][1])
-                    labels = labels_in_memory
+
+                    labels = []
+                    for i in labels_in_memory.keys():
+                        labels.append( labels_in_memory[i] )
                     data_batch = selected_indices, [lefts, rights], labels
 
+                elif mode == 'leftpathsandindices':
+
+                    selected_paths_left = {}
+                    for idx in selected_indices:
+                        print(self.paths[0][idx])
+                        selected_paths_left[idx] = self.paths[0][idx]
+
+                    data_batch = [selected_indices, selected_paths_left]
+
+                elif mode == 'SAVEBATCHFILES':
+                    print("SAVING RUN ~~~ " + BATCH_ID)
+                    print("MAKE SURE THIS IS DONE ONLY WITH THE UNLABANCED DATASET WHEN WE DIDNT REMOVE ANYTHING FROM IT!")
+                    # THIS IS A SPECIAL CASE WHICH LEADS TO MAKING'N'BAKIN OF THE NECESSARY BATCHES
+                    # Can be later used in the mode "dataonly_LOADBATCHFILES"
+
+                    hdf5_path = BATCH_PRECOMP_FOLDER + BATCH_ID
+
+                    data_in_memory, labels_in_memory = self.load_images_by_indices(selected_indices)
+                    lefts = []
+                    rights = []
+                    for i in data_in_memory.keys():
+                        #for i in range(len(data_in_memory)):
+                        lefts.append(data_in_memory[i][0])
+                        rights.append(data_in_memory[i][1])
+
+                    labels = []
+                    for i in labels_in_memory.keys():
+                        labels.append( labels_in_memory[i] )
+
+                    print("About to save:", len(lefts), "lefts, ", len(rights), "rights and", len(labels), "labels with", len(selected_indices), "indices.")
+
+                    data_batch = Helpers.save_images_to_h5_with_wholeDataset_indices(lefts, rights, labels, selected_indices, hdf5_path)
 
                 yield data_batch
 
@@ -496,6 +608,8 @@ class LargeDatasetHandler_AL(object):
         popped_paths = popped_paths_lefts, popped_paths_rights, popped_paths_labels
 
         new_indices = [idx for idx in self.indices if idx not in indices_to_pop]
+        # however the self.orignal_indices remains the same
+
         new_N_of_data = len(new_indices)
         self.indices = new_indices
         self.N_of_data = new_N_of_data
@@ -598,6 +712,7 @@ def get_balanced_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
     debugger = Debugger.Debugger(settings)
 
     h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5"
+    #h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256_SMALLER.h5"
 
     datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, dataLoader, "256_cleanManual")
 
@@ -639,6 +754,8 @@ def get_balanced_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
 def get_unbalanced_dataset(in_memory=False):
     assert in_memory == False
 
+    # prep to move the dataset to >> /cluster/work/igp_psr/ruzickav <<
+    # instead of loading indiv files, load batches in h5 files
 
     from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
     import Settings
