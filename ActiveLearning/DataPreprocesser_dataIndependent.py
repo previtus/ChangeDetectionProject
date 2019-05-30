@@ -61,11 +61,14 @@ class DataPreprocesser_dataIndependent(object):
         #print("self.zeroweighting_R_means_per_channel", self.zeroweighting_R_means_per_channel)
         #print("self.zeroweighting_R_stds_per_channel", self.zeroweighting_R_stds_per_channel)
 
-    def apply_on_a_set_nondestructively(self, set, no_labels = False):
+    def apply_on_a_set_nondestructively(self, set, no_labels = False, be_destructive=False):
         # set can be train, it can be val or anything
         # we don't change the original data, instead we return an edited copy
 
-        set_copy = copy.deepcopy(set)
+        if be_destructive:
+            set_copy = set
+        else:
+            set_copy = copy.deepcopy(set)
         if no_labels:
             lefts, rights = set_copy
         else:

@@ -7,6 +7,7 @@ import Debugger
 from keras.optimizers import Adam
 from keras.utils import to_categorical
 import numpy as np
+import sklearn.metrics
 
 class TrainTestHandler(object):
 
@@ -207,22 +208,24 @@ class TrainTestHandler(object):
 
         else:
 
-            try:
+            if True:
+                #try:
                 history = model.fit([train_L, train_R], train_V, batch_size=batch, epochs=epochs, verbose=2)
                 #                         validation_data=([val_L, val_R], val_V), callbacks=callbacks
 
+            """
             except Exception as e:
                 print("Exception caught when trying to TRAIN:", e)
                 print("Killing anyway ...")
                 #assert False
                 history = None
                 broken_flag = True
-
+            """
 
         return history, broken_flag
 
 
-    def test(self, model, testing_set, evaluator, postprocessor, auto_thr=False, DEBUG_SAVE_ALL_THR_PLOTS=None):
+    def test_oldBack(self, model, testing_set, evaluator, postprocessor, auto_thr=False, DEBUG_SAVE_ALL_THR_PLOTS=None):
         print("Testing model:",model,"on test set (size", len(testing_set[0]),")")
 
         test_L, test_R, test_V = testing_set

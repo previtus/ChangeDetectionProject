@@ -2,6 +2,19 @@ import h5py
 import numpy as np
 from skimage import io
 
+
+def save_images_to_h5_DEFAULT_DATA_FORMAT(lefts, rights, labels, hdf5_path):
+    SUBSET = len(lefts)
+
+    hdf5_file = h5py.File(hdf5_path, mode='w')
+    hdf5_file.create_dataset("lefts", data=lefts)
+    hdf5_file.create_dataset("rights", data=rights)
+    hdf5_file.create_dataset("labels", data=labels)
+    hdf5_file.close()
+
+    print("Saved", SUBSET, "images successfully to:", hdf5_path)
+
+    return hdf5_path
 def load_images_from_h5(hdf5_path):
     hdf5_file = h5py.File(hdf5_path, "r")
     lefts = hdf5_file['lefts'][:]
@@ -10,6 +23,42 @@ def load_images_from_h5(hdf5_path):
     hdf5_file.close()
 
     return lefts, rights, labels
+
+
+#GLOBAL_COMPARATOR = []
+
+def save_images_to_h5_with_wholeDataset_indices(lefts, rights, labels, indices, hdf5_path):
+    SIZE = len(lefts)
+
+    #global GLOBAL_COMPARATOR
+    #GLOBAL_COMPARATOR = indices
+
+    hdf5_file = h5py.File(hdf5_path, mode='w')
+    hdf5_file.create_dataset("lefts", data=lefts)
+    hdf5_file.create_dataset("rights", data=rights)
+    hdf5_file.create_dataset("labels", data=labels)
+    hdf5_file.create_dataset("indices", data=indices, dtype="int") # up to 81000
+    hdf5_file.close()
+
+    print("Saved", SIZE, "images successfully to:", hdf5_path)
+
+    return hdf5_path
+
+def load_images_from_h5_with_wholeDataset_indices(hdf5_path):
+    hdf5_file = h5py.File(hdf5_path, "r")
+    lefts = hdf5_file['lefts'][:]
+    rights = hdf5_file['rights'][:]
+    labels = hdf5_file['labels'][:]
+    indices = hdf5_file['indices'][:]
+    hdf5_file.close()
+
+    #global GLOBAL_COMPARATOR
+    #equal = np.array_equal(indices, GLOBAL_COMPARATOR)
+    #print("equal", equal)
+    #iasjdasl
+
+    return lefts, rights, labels, indices
+
 
 def load_vector_image(filename, IMAGE_RESOLUTION=256):
     if filename == None:
