@@ -225,7 +225,7 @@ class Debugger(object):
         plt.show()
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
-    def viewQuadrupples(self, lefts, rights, labels, predicted, txts=[], how_many=3, off=0, show=True, save=False, name="lastplot"):
+    def viewQuadrupples(self, lefts, rights, labels, predicted, txts=[], how_many=3, off=0, show=True, save=False, name="lastplot", show_txts = True):
         rows, columns = how_many, 4
         fig = plt.figure(figsize=(10, 8))
         k = 1
@@ -240,7 +240,10 @@ class Debugger(object):
             else:
                 plt.imshow(left)
             text = "Left shape "+str(left.shape)+"\n"+self.dynamicRangeInImage(left)[0:-2]
-            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            if show_txts:
+                fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            else:
+                fig.gca().set(xlabel="", xticks=[], yticks=[])
 
             right = rights[idx+off]
             fig.add_subplot(rows, columns, k+1)
@@ -249,14 +252,20 @@ class Debugger(object):
             else:
                 plt.imshow(right)
             text = "Right shape "+str(right.shape)+"\n"+self.dynamicRangeInImage(right)[0:-2]
-            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            if show_txts:
+                fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            else:
+                fig.gca().set(xlabel="", xticks=[], yticks=[])
 
             label = labels[idx + off]
             fig.add_subplot(rows, columns, k+2)
             #plt.imshow(label, cmap='gray')
             plt.imshow(label, cmap='gray')
             text = "Label shape "+str(label.shape)+"\n"+self.dynamicRangeInImage(label)
-            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            if show_txts:
+                fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            else:
+                fig.gca().set(xlabel="", xticks=[], yticks=[])
 
             one_predicted = predicted[idx+off]
             fig.add_subplot(rows, columns, k+3)
@@ -266,7 +275,10 @@ class Debugger(object):
             if len(txts) > 0:
                 text += txts[idx+off]
             text += "Predicted shape "+str(one_predicted.shape)+"\n"+self.dynamicRangeInImage(one_predicted)
-            fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            if show_txts:
+                fig.gca().set(xlabel=text, xticks=[], yticks=[])
+            else:
+                fig.gca().set(xlabel="", xticks=[], yticks=[])
             k += 4
 
         if show:

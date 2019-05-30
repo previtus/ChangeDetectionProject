@@ -8,6 +8,7 @@ from ActiveLearning.TrainTestHandler import TrainTestHandler
 from Evaluator import Evaluator
 from timeit import default_timer as timer
 from datetime import *
+import os
 
 months = ["unk","jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"]
 month = (months[datetime.now().month])
@@ -32,9 +33,11 @@ parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "
 
 parser.add_argument('-AL_Ensemble_numofmodels', help='If we chose Ensemble, how many models are there?', default="3")
 
-def main(args):
-    print(args)
+parser.add_argument('-DEBUG_remove_from_dataset', help='Debug to remove random samples without change from the original dataset...', default="40000")
 
+def main(args):
+    args_txt = str(args)
+    print(args_txt)
 
     #import tensorflow as tf
     #config = tf.ConfigProto()
@@ -138,8 +141,18 @@ def main(args):
     #for active_learning_iteration in range(30): # 30*500 => 15k images
     for active_learning_iteration in range(N_ITERATIONS):
         xs_number_of_data.append(TrainSet.get_number_of_samples())
-
         # survived to 0-5 = 6*500 = 3000 images (I think that then the RAM was filled ...)
+
+        # Save args log:
+        DEBUG_SAVE_ALL_THR_FOLDER = "["+args.name+"]_iteration_"+str(active_learning_iteration).zfill(2)+"_debugThrOverview/"
+        DEBUG_SAVE_ALL_THR_PLOTS = DEBUG_SAVE_ALL_THR_FOLDER+"iteration_"+str(active_learning_iteration).zfill(2)
+        #DEBUG_SAVE_ALL_THR_PLOTS = None
+        if not os.path.exists(DEBUG_SAVE_ALL_THR_FOLDER):
+            os.makedirs(DEBUG_SAVE_ALL_THR_FOLDER)
+        file = open(DEBUG_SAVE_ALL_THR_FOLDER+"args.txt", "w")
+        file.write(args_txt)
+        file.close()
+
         print("\n")
         print("==========================================================")
         print("\n")
@@ -229,40 +242,27 @@ def main(args):
                 modelHandler.load(root+"initTests_"+str(i))
 
 
-
         print("Now I would test ...")
 
-        DEBUG_SAVE_ALL_THR_PLOTS = "iteration_"+str(active_learning_iteration).zfill(2)+"_debugThrOverview"
-        #DEBUG_SAVE_ALL_THR_PLOTS = None
-        auto_thr = True # automatically choose thr which maximizes f1 score
+        models = []
+        for i in range(ModelEnsemble_N):
+            models.append( ModelEnsemble[i].model )
 
-        """ a
-        from keras import backend as K
-        from keras.models import load_model
-    
-        ModelHandler.save("tmp.h5")
-    
-        K.clear_session()
-        K.set_learning_phase(1)
-    
-        ModelHandler2 = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
-        ModelHandler2.load('tmp.h5')
-        model2 = ModelHandler2.model
-        """
-        ##### trainTestHandler.test_STOCHASTIC_TESTS(model, processed_test, evaluator, postprocessor=dataPreprocesser, auto_thr=auto_thr, DEBUG_SAVE_ALL_THR_PLOTS=DEBUG_SAVE_ALL_THR_PLOTS)
+        statistics = evaluator.unified_test_report(models, processed_test, postprocessor=dataPreprocesser,
+                                                   name=DEBUG_SAVE_ALL_THR_PLOTS,
+                                                   optionally_save_missclassified=True)
 
-        print("Selecting first model from the Ensemble for tests ...")
-        model = ModelEnsemble[0].model
+        mask_stats, tiles_stats = statistics
+        tiles_best_thr, tiles_selected_recall, tiles_selected_precision, tiles_selected_accuracy, tiles_selected_f1 = tiles_stats
+        pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1 = mask_stats
 
-        recall, precision, accuracy, f1, threshold = trainTestHandler.test(model, processed_test, evaluator, postprocessor=dataPreprocesser, auto_thr=auto_thr, DEBUG_SAVE_ALL_THR_PLOTS=DEBUG_SAVE_ALL_THR_PLOTS)
-        recalls.append(recall)
-        precisions.append(precision)
-        accuracies.append(accuracy)
-        f1s.append(f1)
-        thresholds.append(threshold)
+        # TODO: I SHOULD SAVE BOTH
 
-        print("Now I would store/save the resulting model ...")
-
+        recalls.append(pixels_selected_recall)
+        precisions.append(pixels_selected_precision)
+        accuracies.append(pixels_selected_accuracy)
+        f1s.append(pixels_selected_f1)
+        thresholds.append(pixels_best_thr)
 
         print("Add new samples as per AL paradigm ... acquisition_function_mode=",acquisition_function_mode)
 
@@ -438,107 +438,7 @@ def main(args):
         packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
         TrainSet.add_items(packed_items)
 
-
-        """ Experiment with the embedding of the model """
-        """ Doesnt seem to work particularly well - dist is (prolly) not a good indicator for how much it changed
-        remaining_data = None # np.ones((1, 10, 64, 64, 1)
-    
-        print("Layers >>> ")
-        model.summary()
-    
-        from keras.models import Model
-        from keras.layers.core import Lambda, Flatten
-    
-        #layer_name = 'model_2'
-        #left_features = model.get_layer(layer_name).get_output_at(1)[0] # (?, 8, 8, 512) in resnet 34
-        #right_features = model.get_layer(layer_name).get_output_at(2)[0] # (?, 8, 8, 512) in resnet 34
-        concatenate_1 = model.get_layer("concatHighLvlFeat")
-    
-        def Crop(dim, start, end, **kwargs): #https://github.com/keras-team/keras/issues/890
-            # Crops (or slices) a Tensor on a given dimension from start to end
-            # example : to crop tensor x[:, :, 5:10]
-            def func(x):
-                dimension = dim
-                if dimension == -1:
-                    dimension = len(x.shape) - 1
-                if dimension == 0:
-                    return x[start:end]
-                if dimension == 1:
-                    return x[:, start:end]
-                if dimension == 2:
-                    return x[:, :, start:end]
-                if dimension == 3:
-                    return x[:, :, :, start:end]
-                if dimension == 4:
-                    return x[:, :, :, :, start:end]
-            return Lambda(func, **kwargs)
-    
-        concat_feat_size = concatenate_1.output_shape[3]
-        intermediate_layer_model = Model(inputs=model.input,
-                                         outputs=[Flatten(name="left_feature")(Crop(3,0,int(concat_feat_size/2))(concatenate_1.output)),
-                                                  Flatten(name="right_feature")(Crop(3,int(concat_feat_size/2),concat_feat_size)(concatenate_1.output))])
-        #left_features = intermediate_layer_model.get_layer("left_feature")
-        #right_features = intermediate_layer_model.get_layer("right_feature")
-    
-        for layer in intermediate_layer_model.layers:
-            print(layer.output_shape)
-    
-        _, _, as_ones_and_zeros, idx_examples_bigger, idx_examples_smaller = TestSet.report_balance_of_class_labels(DEBUG_GET_IDX=True)
-    
-        train_L, train_R, train_V = processed_test # Just Trying / replace by batches from Unlabeled
-        if train_L.shape[3] > 3:
-            train_L = train_L[:, :, :, 1:4]
-            train_R = train_R[:, :, :, 1:4]
-    
-        intermediate_output = intermediate_layer_model.predict([train_L, train_R], batch_size=32)
-        left_features = intermediate_output[0] # N, 32768
-        right_features = intermediate_output[1] # N, 32768
-    
-        print(intermediate_output)
-        print(left_features.shape)
-        print(right_features.shape)
-    
-        num_of_samples = len(left_features)
-    
-        def euclidean_distance(x, y):
-            return np.sqrt(np.sum((x - y) ** 2))
-    
-        def cosine_similarity(x, y):
-            return np.dot(x, y) / (np.sqrt(np.dot(x, x)) * np.sqrt(np.dot(y, y)))
-    
-        distances = []
-        distances_changed_gt = []
-        distances_notchanged_gt = []
-        for sample_i in range(num_of_samples):
-            l = left_features[sample_i]
-            r = right_features[sample_i]
-    
-            dist = cosine_similarity(l,r)
-            #dist = euclidean_distance(l,r)
-            distances.append(dist)
-    
-            if as_ones_and_zeros[sample_i]:
-                distances_changed_gt.append(dist)
-            else:
-                distances_notchanged_gt.append(dist)
-    
-        #as_ones_and_zeros, idx_examples_bigger, idx_examples_smaller
-    
-    
-        distances.sort()
-        distances_changed_gt.sort()
-        distances_notchanged_gt.sort()
-    
-        plt.figure(figsize=(7, 7))  # w, h
-        plt.plot(distances, 'black', label="distances")
-        plt.plot(distances_changed_gt, 'red', label="changed")
-        plt.plot(distances_notchanged_gt, 'blue', label="not")
-        plt.legend()
-        #plt.ylim(0.0, 1.0)
-        plt.show() #### What about a "good" model ? How does it behave there ??
-        """
-        """ End """
-
+        # Clean up
 
         for handler in ModelEnsemble:
             model = handler.model
@@ -558,14 +458,14 @@ def main(args):
         # Cheeky save per each iteration (so we can reconstruct old / broken plots)
         statistics = thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged
         statistics = np.asarray(statistics)
-        np.save("al_statistics.npy", statistics)
+        np.save("["+args.name+"]_al_statistics.npy", statistics)
 
     #- AL outline, have two sets - TrainSet and UnlabeledSet and move data in between them... (always everything we have?)
     #2b.) Acquisition function to select subset of the RemainingUnlabeledSet -> move it to the TrainSet
 
     statistics = thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged
     statistics = np.asarray(statistics)
-    np.save("al_statistics.npy", statistics)
+    np.save("["+args.name+"]_al_statistics.npy", statistics)
     #####statistics = np.load("al_statistics.npy")
 
     thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged = statistics
@@ -594,8 +494,8 @@ def main(args):
     plt.legend()
     plt.ylim(0.0, 1.0)
 
-    plt.savefig("dbg_last_al_big_plot.png")
-    plt.show()
+    plt.savefig("["+args.name+"]_dbg_last_al_big_plot_pixelsScores.png")
+    plt.close()
 
 
     plt.figure(figsize=(7, 7)) # w, h
@@ -610,8 +510,8 @@ def main(args):
     plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
     plt.legend((p1[0], p2[0]), ('Change', 'NoChange'))
 
-    plt.savefig("dbg_last_al_balance_plot.png")
-    plt.show()
+    plt.savefig("["+args.name+"]_dbg_last_al_balance_plot.png")
+    plt.close()
 
     print("Ensemble tested on completely unbalanced!")
     print("Trying one with 1k to 40k balance and having it run properly - for few iterations at least -> later compare that between methods")

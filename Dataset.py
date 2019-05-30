@@ -81,25 +81,6 @@ class Dataset(object):
         #self.test = self.dataPreprocesser.process_dataset_OLDSIMPLE(self.test)
 
 
-    def init_from_data_manually(self, train_data, train_paths, test_data, test_paths):
-        # all of these come as ~ [lefts, rights, labels] where lefts etc. are arrays
-        print("Dataset loaded with", len(train_data[0]), "images.")
-
-        # Shuffle
-        train_data = self.shuffle_thyself(train_data)
-
-        # Split into training, validation and test:
-        self.train = train_data
-        self.val = []
-        self.test = test_data
-
-        self.train_paths = train_paths
-        self.val_paths = []
-        self.test_paths = test_paths
-
-        # preprocess the dataset
-        self.train, self.val, self.test = self.dataPreprocesser.process_dataset(self.train, self.val, self.test)
-
     def shuffle_thyself(self, data):
         # !
         return data

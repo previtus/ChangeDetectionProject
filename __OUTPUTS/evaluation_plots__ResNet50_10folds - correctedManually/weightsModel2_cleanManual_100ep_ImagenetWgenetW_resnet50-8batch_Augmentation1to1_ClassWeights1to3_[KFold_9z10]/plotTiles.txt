@@ -1,0 +1,19 @@
+Using threshold 0.05 we get:
+              precision    recall  f1-score   support
+
+   no change       0.90      0.99      0.94       107
+      change       0.99      0.88      0.93       102
+
+   micro avg       0.94      0.94      0.94       209
+   macro avg       0.94      0.94      0.94       209
+weighted avg       0.94      0.94      0.94       209
+
+[[106   1]
+ [ 12  90]]
+as [[TN   FP], [FN   TP]]
+TP 90 	 ... correctly classified as a change.
+TN 106	 ... correctly classified as a no-change.
+FP 1	 ... classified as change while it's not.
+FN 12	 ... classified as no-change while it is one.
+
+Stats: acc 0.937799043062201, prec 0.989010989010989, recall 0.8823529411764706, f1 0.9326424870466321

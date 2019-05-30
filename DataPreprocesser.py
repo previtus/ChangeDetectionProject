@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 class DataPreprocesser(object):
     """
@@ -81,6 +82,46 @@ class DataPreprocesser(object):
 
         return [train, val, test]
 
+    def apply_on_a_set_nondestructively(self, set, no_labels = False, be_destructive=False):
+        # set can be train, it can be val or anything
+        # we don't change the original data, instead we return an edited copy
+
+        if be_destructive:
+            set_copy = set
+        else:
+            set_copy = copy.deepcopy(set)
+        if no_labels:
+            lefts, rights = set_copy
+        else:
+            lefts, rights, labels = set_copy
+
+        lefts = np.asarray(lefts).astype('float32')
+        rights = np.asarray(rights).astype('float32')
+
+        # insp. https://sebastianraschka.com/Articles/2014_about_feature_scaling.html
+        # standartized = (x_np - x_np.mean()) / x_np.std()
+
+        number_of_channels = self.number_of_channels
+        for channel in range(number_of_channels):
+            l_mean = self.zeroweighting_L_means_per_channel[channel]
+            l_std = self.zeroweighting_L_stds_per_channel[channel]
+
+            r_mean = self.zeroweighting_R_means_per_channel[channel]
+            r_std = self.zeroweighting_R_stds_per_channel[channel]
+
+            lefts[:, :, :, channel] -= l_mean
+            lefts[:, :, :, channel] /= l_std
+
+            rights[:, :, :, channel] -= r_mean
+            rights[:, :, :, channel] /= r_std
+
+        if no_labels:
+            set_return = lefts, rights
+        else:
+            set_return = lefts, rights, labels
+
+        return set_return
+
     def postprocess_images(self, images_L, images_R):
         # from normalized, zero weighted back to the original values
 
@@ -133,13 +174,5 @@ class DataPreprocesser(object):
     def postprocess_labels(self, labels):
         # serves to project final labels back to where they originally were
         # no need right now, we didn't touch the labels
-
-        #labels = (labels + 0.5)
-        #labels = labels * 2.0
-
-        threshold = 0.5
-        #labels[labels >= threshold] = 1
-        #labels[labels < threshold] = 0
-
         return labels
 

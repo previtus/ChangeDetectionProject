@@ -66,8 +66,9 @@ def main(args):
     # - ... any other special cool thing ...
 
     # K-Fold_Crossval:
+    #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_"+model_txt+"_["+kfold_txt+"].h5")
+    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_"+model_txt+"_["+kfold_txt+"]_(TESTSMALLERFILE20EP).h5")
 
-    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_"+model_txt+"_["+kfold_txt+"].h5")
 
     # Next = train Resnet50 on the same dataset without the whole STRIP2 (to have some large Test images)
 
@@ -149,7 +150,22 @@ def main(args):
     #model.model.load("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/onera_weights_Take2.h5")
     #model.model.load("/home/ruzickav/python_projects/test1/last_OSCD_model_weightsNewer.h5")
 
-    model.model.test(evaluator,show=show,save=save)
+
+    SAVE_ALL_FOLDER = model_txt+"PLOTS/"
+    SAVE_ALL_PLOTS = SAVE_ALL_FOLDER+"plot"
+    # DEBUG_SAVE_ALL_THR_PLOTS = None
+    if not os.path.exists(SAVE_ALL_FOLDER):
+        os.makedirs(SAVE_ALL_FOLDER)
+
+    evaluator.unified_test_report([model.model.model], dataset.test, postprocessor=model.model.dataPreprocesser,
+                                                                               name=SAVE_ALL_PLOTS,
+                                                                               optionally_save_missclassified=True)
+
+    #model.model.test(evaluator,show=show,save=save)
+
+
+
+
     #model.model.test_on_specially_loaded_set(evaluator,show=show,save=save) # << LOAD just strip 2 here, use FCN to predict large areas
     #model.model.test_show_on_train_data_to_see_overfit(evaluator)
 

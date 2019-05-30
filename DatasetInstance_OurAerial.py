@@ -79,7 +79,8 @@ class DatasetInstance_OurAerial(object):
 
             if self.variant == "256_cleanManual":
                 # needs also the source images without overlap!
-                self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5"
+                #self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5"
+                self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256_SMALLER.h5"
                 # 8 perc => 942/2 change images
                 # 3 perc => 2144/2 change images
                 self.bigger_than_percent = 3.0 # try?
@@ -883,7 +884,7 @@ class DatasetInstance_OurAerial(object):
         # as many from the "smaller"
         to_select = len(idx_examples_bigger)
 
-        indices_smaller = random.sample(range(0, len(idx_examples_smaller)), to_select)
+        indices_smaller = random.sample(range(0, len(idx_examples_smaller)), to_select) # "NO CHANGE" samples are shuffled across the whole map
         #print(indices_smaller)
 
         non_repetition = []

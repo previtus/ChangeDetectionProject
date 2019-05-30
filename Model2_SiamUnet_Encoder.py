@@ -317,7 +317,8 @@ class Model2_SiamUnet_Encoder(object):
         Tile_Based_Evaluation = True
         if Tile_Based_Evaluation:
             chosen_threshold = mask_best_thr
-            test_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(self.dataset.test[2])
+            test_classlabels = evaluator.mask_label_into_class_label(self.dataset.test[2])
+            #test_classlabels = self.dataset.datasetInstance.mask_label_into_class_label(self.dataset.test[2])
 
             # This has to actually be thresholded before we calculate the tile label (we have to count occurance of 1s)
             predictions_thresholded, _, _, _, _= evaluator.calculate_metrics(predicted, test_V, threshold=chosen_threshold)
