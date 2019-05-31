@@ -632,13 +632,20 @@ class Evaluator(object):
 
     # ================= Unified test func call:
 
-    def unified_test_report(self, models, testing_set, postprocessor, name, threshold_fineness = 0.05, optionally_save_missclassified = False, optional_manual_exclusions=[], optional_additional_predAndGts = []):
+    def unified_test_report(self, models, testing_set, validation_set, postprocessor, name, threshold_fineness = 0.05, optionally_save_missclassified = False, optional_manual_exclusions=[], optional_additional_predAndGts = []):
         if len(models) > 1:
             print("Testing model ensemble:", len(models), "*" ,models[0],"on test set (size", len(testing_set[0]),")")
         else:
             print("Testing model:", models[0], "on test set (size", len(testing_set[0]), ")")
 
         test_L, test_R, test_V = testing_set
+
+        if validation_set is not None:
+            val_L, val_R, val_V = validation_set
+            if val_L.shape[3] > 3:
+                # 3 channels only - rgb
+                val_L = val_L[:, :, :, 1:4]
+                val_R = val_R[:, :, :, 1:4]
 
         if test_L.shape[3] > 3:
             # 3 channels only - rgb
@@ -648,8 +655,17 @@ class Evaluator(object):
         if len(models) > 1:
             ensemble_predictions = []
             for model in models:
+                print("predicting for the test set")
                 predicted = model.predict(x=[test_L, test_R], batch_size=4)
                 ensemble_predictions.append(predicted)
+
+            if validation_set is not None:
+                ensemble_val_predictions = []
+                for model in models:
+                    print("predicting for the val set")
+                    predicted_val = model.predict(x=[val_L, val_R], batch_size=4)
+                    ensemble_val_predictions.append(predicted_val)
+
 
             print("TODO: mean from the predictions of an ensemble")
             print("HAX, use just the 1st model")
@@ -668,14 +684,23 @@ class Evaluator(object):
         else:
             predicted = models[0].predict(x=[test_L, test_R], batch_size=4)
 
+            if validation_set is not None:
+                predicted_val = models[0].predict(x=[val_L, val_R], batch_size=4)
+
         # with just 2 classes I can hax:
         predicted = predicted[:, :, :, 1]
-
         predicted = postprocessor.postprocess_labels(predicted)
+
+        if validation_set is not None:
+            predicted_val = predicted_val[:, :, :, 1]
+            predicted_val = postprocessor.postprocess_labels(predicted_val)
 
         officially_we_have_N = len(predicted)
 
         if len(optional_manual_exclusions) > 0:
+            ### Will have to redo for the 10foldcrossval if I get the test set differently
+            ### Validation set can stay ...
+
             # HAXES HEXES:
             len_one = len(predicted)
             good_indices = []
@@ -717,7 +742,7 @@ class Evaluator(object):
         # --- save text output and human-legible report
 
         ### ??? Per pixel AUC:
-        pixels_auc = self.calculate_auc_roc(predicted, test_V, name=name)
+        pixels_auc = self.calculate_auc_roc(predicted, test_V, name=name) # < could the ROC curve tell us which thr to choose?? In that case I'd call that on the validation val_V (if I had it)
 
         show = False
         save = True
@@ -740,12 +765,41 @@ class Evaluator(object):
         pixels_max_f1_idx = np.argmax(pixels_ys_f1s[1:-1]) + 1
         pixels_best_thr = pixels_xs_tresholds[pixels_max_f1_idx]
 
+        note_txt = ""
+
+        # Make this decision on Validation set!
+        if validation_set is not None:
+            print("All thrs on validation set:")
+            val_pixels_auc = self.calculate_auc_roc(predicted_val, val_V, name=name+"__onValidationSet__")
+
+            validation_pixels_stats = self.try_all_thresholds(predicted_val, val_V,
+                                                   np.arange(0.0, 1.0 + threshold_fineness, threshold_fineness),
+                                                   title_txt="Masks (all pixels 0/1) evaluated [Change Class] on ValidationSet",
+                                                   show=show, save=save, name=name + "PixelsVAL")
+            val_pixels_xs_tresholds, val_pixels_ys_recalls, val_pixels_ys_precisions, val_pixels_ys_accuracies, val_pixels_ys_f1s = validation_pixels_stats
+
+            print("val_pixels_xs_tresholds", val_pixels_xs_tresholds)
+            print("val_pixels_ys_recalls", val_pixels_ys_recalls)
+            print("val_pixels_ys_precisions", val_pixels_ys_precisions)
+            print("val_pixels_ys_accuracies", val_pixels_ys_accuracies)
+            print("val_pixels_ys_f1s", val_pixels_ys_f1s)
+            print("val_pixels_auc", val_pixels_auc)
+            # for maximum we don't allow the end points thought
+            val_pixels_max_f1_idx = np.argmax(val_pixels_ys_f1s[1:-1]) + 1
+            val_pixels_best_thr = val_pixels_xs_tresholds[val_pixels_max_f1_idx]
+
+            pixels_best_thr = val_pixels_best_thr
+            pixels_max_f1_idx = val_pixels_max_f1_idx
+
+            note_txt = "(on the Validation set)"
+
         pixels_selected_recall = pixels_ys_recalls[pixels_max_f1_idx]
         pixels_selected_precision = pixels_ys_precisions[pixels_max_f1_idx]
         pixels_selected_accuracy = pixels_ys_accuracies[pixels_max_f1_idx]
         pixels_selected_f1 = pixels_ys_f1s[pixels_max_f1_idx]
 
-        print("Per pixel - Selecting threshold as", pixels_best_thr, "as it maximizes the f1 score getting", pixels_selected_f1,
+
+        print("Per pixel - Selecting threshold as", pixels_best_thr, "as it maximizes the f1 score "+note_txt+" getting", pixels_selected_f1,
               "(other scores are: recall", pixels_selected_recall, ", precision", pixels_selected_precision, ", acc", pixels_selected_accuracy, ")")
 
         # text outputs for the best setting:
@@ -776,12 +830,44 @@ class Evaluator(object):
         tiles_max_f1_idx = np.argmax(tiles_ys_f1s[1:-1]) + 1
         tiles_best_thr = tiles_xs_tresholds[tiles_max_f1_idx]
 
+        note_txt = ""
+
+        # Make this decision on Validation set!
+        if validation_set is not None:
+            print("All thrs on validation set:")
+            validation_tiles_stats = self.try_all_thresholds_per_tiles(predicted_val, val_V,
+                                                   np.arange(0.0, 1.0 + threshold_fineness, threshold_fineness),
+                                                   title_txt="Tiles (tile 0/1) evaluated [Change Class] on ValidationSet",
+                                                   show=show, save=save, name=name + "TilesVAL")
+            val_tiles_xs_tresholds, val_tiles_ys_recalls, val_tiles_ys_precisions, val_tiles_ys_accuracies, val_tiles_ys_f1s = validation_tiles_stats
+
+            print("val_tiles_xs_tresholds", val_tiles_xs_tresholds)
+            print("val_tiles_ys_recalls", val_tiles_ys_recalls)
+            print("val_tiles_ys_precisions", val_tiles_ys_precisions)
+            print("val_tiles_ys_accuracies", val_tiles_ys_accuracies)
+            print("val_tiles_ys_f1s", val_tiles_ys_f1s)
+
+            # for maximum we don't allow the end points thought
+            val_tiles_max_f1_idx = np.argmax(val_tiles_ys_f1s[1:-1]) + 1
+            val_tiles_best_thr = val_tiles_xs_tresholds[val_tiles_max_f1_idx]
+
+            print("] Per tile on validation set - we select threshold as", val_tiles_best_thr,
+                  "as it maximizes the val f1 score getting", val_tiles_ys_f1s[val_tiles_max_f1_idx],
+                  "(other scores are: val recall", val_tiles_ys_recalls[val_tiles_max_f1_idx], ", val precision", val_tiles_ys_precisions[val_tiles_max_f1_idx], ", val acc",
+                  val_tiles_ys_accuracies[val_tiles_max_f1_idx], ")")
+
+            tiles_best_thr = val_tiles_best_thr
+            tiles_max_f1_idx = val_tiles_max_f1_idx
+
+            note_txt = "(on the Validation set)"
+
+
         tiles_selected_recall = tiles_ys_recalls[tiles_max_f1_idx]
         tiles_selected_precision = tiles_ys_precisions[tiles_max_f1_idx]
         tiles_selected_accuracy = tiles_ys_accuracies[tiles_max_f1_idx]
         tiles_selected_f1 = tiles_ys_f1s[tiles_max_f1_idx]
 
-        print("Per tile - Selecting threshold as", tiles_best_thr, "as it maximizes the f1 score getting", tiles_selected_f1,
+        print("Per tile - Selecting threshold as", tiles_best_thr, "as it maximizes the f1 score "+note_txt+" getting", tiles_selected_f1,
               "(other scores are: recall", tiles_selected_recall, ", precision", tiles_selected_precision, ", acc", tiles_selected_accuracy, ")")
 
         # text report for per tile eval
@@ -884,7 +970,7 @@ class Evaluator(object):
 
 
         tiles_stats = tiles_best_thr, tiles_selected_recall, tiles_selected_precision, tiles_selected_accuracy, tiles_selected_f1
-        mask_stats = pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1
+        mask_stats = pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1, pixels_auc
         statistics = mask_stats, tiles_stats
         return statistics
 

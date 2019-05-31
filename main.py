@@ -14,7 +14,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Project: Change detection on aerial images.')
 parser.add_argument('-name', help='run name - will output in this dir', default="Run-"+month+"-"+day)
-parser.add_argument('-KFOLDS', help='Number of folds', default='10')
+parser.add_argument('-KFOLDS', help='Number of folds', default='5')
 parser.add_argument('-FOLD_I', help='This fold i', default='0')
 parser.add_argument('-model_backend', help='Model used in the encoder part of the U-Net structures model', default='resnet50')
 parser.add_argument('-train_epochs', help='How many epochs', default='100')
@@ -35,7 +35,7 @@ def main(args):
 
     # resnet 101 approx 5-6 hours (per fold - might be a bit less ...)
     # resnet 50  approx 3-4 hours
-    model_txt = "cleanManual_"+args.train_epochs+"ep_ImagenetWgenetW_"+args.model_backend+"-"+args.train_batch+"batch_Augmentation1to1_ClassWeights1to3"
+    model_txt = "cleanManual_"+args.train_epochs+"ep_ImagenetWgenetW_"+args.model_backend+"-"+args.train_batch+"batch_Augmentation1to1_ClassWeights1to3_TestVal"
     print(model_txt)
 
     dataset = Dataset.Dataset(settings)
@@ -67,7 +67,7 @@ def main(args):
 
     # K-Fold_Crossval:
     #model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_"+model_txt+"_["+kfold_txt+"].h5")
-    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_"+model_txt+"_["+kfold_txt+"]_(TESTSMALLERFILE20EP).h5")
+    model.model.save("/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/weightsModel2_"+model_txt+"_["+kfold_txt+"].h5")
 
 
     # Next = train Resnet50 on the same dataset without the whole STRIP2 (to have some large Test images)
@@ -157,7 +157,7 @@ def main(args):
     if not os.path.exists(SAVE_ALL_FOLDER):
         os.makedirs(SAVE_ALL_FOLDER)
 
-    evaluator.unified_test_report([model.model.model], dataset.test, postprocessor=model.model.dataPreprocesser,
+    evaluator.unified_test_report([model.model.model], dataset.test, validation_set=dataset.val, postprocessor=model.model.dataPreprocesser,
                                                                                name=SAVE_ALL_PLOTS,
                                                                                optionally_save_missclassified=True)
 

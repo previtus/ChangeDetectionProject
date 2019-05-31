@@ -160,10 +160,13 @@ class DatasetInstance_OurAerial(object):
 
         test_L = np.empty(((0,)+lefts.shape[1:]), lefts.dtype)
         train_L = np.empty(((0,)+lefts.shape[1:]), lefts.dtype)
+        val_L = np.empty(((0,)+lefts.shape[1:]), lefts.dtype)
         test_R = np.empty(((0,) + rights.shape[1:]), rights.dtype)
         train_R = np.empty(((0,) + rights.shape[1:]), rights.dtype)
+        val_R = np.empty(((0,) + rights.shape[1:]), rights.dtype)
         test_V = np.empty(((0,) + labels.shape[1:]), labels.dtype)
         train_V = np.empty(((0,) + labels.shape[1:]), labels.dtype)
+        val_V = np.empty(((0,) + labels.shape[1:]), labels.dtype)
 
         data_start = 0
         for fold_index in range(K):
@@ -178,10 +181,23 @@ class DatasetInstance_OurAerial(object):
             #print("fold_L.shape", fold_L.shape)
 
             if fold_index == test_fold:
+                # we want to have half test and half val:
+                mid = int(len(fold_L)/2)
+
+                test_fold_L = fold_L[mid:]
+                val_fold_L = fold_L[0:mid]
+                test_fold_R = fold_R[mid:]
+                val_fold_R = fold_R[0:mid]
+                test_fold_V = fold_V[mid:]
+                val_fold_V = fold_V[0:mid]
+
                 # add to test set
-                test_L = np.append(test_L, fold_L, 0)
-                test_R = np.append(test_R, fold_R, 0)
-                test_V = np.append(test_V, fold_V, 0)
+                test_L = np.append(test_L, test_fold_L, 0)
+                test_R = np.append(test_R, test_fold_R, 0)
+                test_V = np.append(test_V, test_fold_V, 0)
+                val_L = np.append(val_L, val_fold_L, 0)
+                val_R = np.append(val_R, val_fold_R, 0)
+                val_V = np.append(val_V, val_fold_V, 0)
             else:
                 # add to train set
                 train_L = np.append(train_L, fold_L, 0)
@@ -192,7 +208,7 @@ class DatasetInstance_OurAerial(object):
 
         train = [train_L, train_R, train_V]
         test = [test_L, test_R, test_V]
-        val = test # hmmm
+        val = [val_L, val_R, val_V]
 
         return train, val, test
 

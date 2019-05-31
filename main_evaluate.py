@@ -310,7 +310,7 @@ def main(args):
             optional_additional_predAndGts = []
 
         SAVE_ALL_PLOTS = model.model.save_plot_path + "plot"
-        statistics = evaluator.unified_test_report([model.model.model], dataset.test, postprocessor=model.model.dataPreprocesser,
+        statistics = evaluator.unified_test_report([model.model.model], dataset.test, validation_set=dataset.val, postprocessor=model.model.dataPreprocesser,
                                                     name=SAVE_ALL_PLOTS, optionally_save_missclassified=True,
                                                    optional_manual_exclusions = exclusions_by_idxs[model_idx],
                                                    optional_additional_predAndGts = optional_additional_predAndGts)

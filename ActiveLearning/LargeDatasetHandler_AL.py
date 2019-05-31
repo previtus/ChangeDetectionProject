@@ -328,14 +328,17 @@ class LargeDatasetHandler_AL(object):
         print("debug: len(remaining_indices)", len(remaining_indices))
 
         for idx in range(len(lefts)):
-            if idx not in removed_indices:
-                orig_idx = corresponding_indices[idx]
+            orig_idx = corresponding_indices[idx]
+            if orig_idx not in removed_indices:
                 data_in_memory[orig_idx] = lefts[idx], rights[idx] # reconstruct them as dictionaries
 
         for idx in range(len(labels)):
-            if idx not in removed_indices:
-                orig_idx = corresponding_indices[idx]
+            orig_idx = corresponding_indices[idx]
+            if orig_idx not in removed_indices:
                 labels_in_memory[orig_idx] = labels[idx]
+
+        print("debug: len(data_in_memory.keys())", len(data_in_memory.keys()))
+        print("debug: len(labels_in_memory.keys())", len(labels_in_memory.keys()))
 
         return data_in_memory, labels_in_memory, remaining_indices
 
@@ -378,7 +381,8 @@ class LargeDatasetHandler_AL(object):
     # Data generator ===================================================================================================
 
     # mode > indices, dataonly, datalabels
-    def generator_for_all_images(self, BATCH_SIZE=2048, mode='indices', custom_indices_to_sample_from = None):
+    def generator_for_all_images(self, BATCH_SIZE=2048, mode='indices', custom_indices_to_sample_from = None, skip_i_batches = 0,
+                                 requested_exactly_these_indices_to_load = None):
         # over time also returns all the images of the dataset, goes in the batches
         # see: https://github.com/keras-team/keras/issues/107
         LOOPING = 1
@@ -387,6 +391,11 @@ class LargeDatasetHandler_AL(object):
                 loop_times = self.N_of_data / BATCH_SIZE
             else:
                 loop_times = len(custom_indices_to_sample_from) / BATCH_SIZE
+
+            if mode == 'dataonly_LOADBATCHFILES':
+                # we do have to load all the files and check for samples randomly spread in them ...
+                # for that reason the loop_times will be always the max.
+                loop_times = len(self.original_indices) / BATCH_SIZE
 
             int_loop_times = int(np.floor(loop_times)) + 1
             # +1 => last batch will be with less samples (1224 instead of the full 2048)
@@ -405,7 +414,12 @@ class LargeDatasetHandler_AL(object):
                     end_of_selection = min(end_of_selection, len(custom_indices_to_sample_from))
                     selected_indices = list(custom_indices_to_sample_from[i * BATCH_SIZE:end_of_selection])
 
+                if i < skip_i_batches:
+                    print("Skipped batch i=",i)
+                    continue
+                # 00i_2048_from83144.h5
                 BATCH_ID = str(i).zfill(3) + "_" + str(BATCH_SIZE) + "_from" + str(self.N_of_data) + ".h5"
+                BATCH_ID = str(i).zfill(3) + "_" + str(BATCH_SIZE) + "_from83144.h5"
 
                 if mode == 'indices':
                     data_batch = [selected_indices] # INDICES
@@ -437,6 +451,21 @@ class LargeDatasetHandler_AL(object):
                         rights.append(data_in_memory[i][1])
 
                     data_batch = corresponding_indices, [lefts,rights] # ps: can contain less items that the requested batch size ...
+
+                elif mode == 'dataonly_LOADBATCHFILES_REQUESTED_INDICES_ONLY':
+                    print(requested_exactly_these_indices_to_load)
+                    added_data_in_memory = {}
+                    added_labels_in_memory = {}
+                    received_indices = []
+
+                    data_in_memory, labels_in_memory, corresponding_indices = self.load_chunk_of_images_from_h5_without_removed_ones(BATCH_ID,BATCH_PRECOMP_FOLDER)
+                    for idx in data_in_memory.keys():
+                        if idx in requested_exactly_these_indices_to_load:
+                            added_data_in_memory[idx] = data_in_memory[idx]
+                            added_labels_in_memory[idx] = labels_in_memory[idx]
+                            received_indices.append(idx)
+
+                    data_batch = added_data_in_memory, added_labels_in_memory, received_indices
 
                 elif mode == 'labelsonly':
                     _, labels_in_memory = self.load_images_by_indices(selected_indices, skip_data=True)
@@ -628,6 +657,16 @@ class LargeDatasetHandler_AL(object):
         if self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND == "inmemory" and mem_flag == "ondemand":
             print("Will have to load them to memory!")
 
+            if False:
+                added_data_in_memory = {}
+                added_labels_in_memory = {}
+                received_indices = []
+                for batch in self.generator_for_all_images(PER_BATCH=2048, mode='dataonly_LOADBATCHFILES_REQUESTED_INDICES_ONLY', requested_exactly_these_indices_to_load=indices_to_added):  # Yields a large batch sample
+                    # batch = data_in_memory, labels_in_memory, corresponding_indices
+                    batch_added_data_in_memory, batch_added_labels_in_memory, batch_received_indices = batch
+                    # double_check(indices_to_added < - > received_indices)
+                    # merge batch_* into added_*
+
             added_data_in_memory, added_labels_in_memory = self.load_images_into_memory(added_paths)
 
         elif self.KEEP_IT_IN_MEMORY_OR_LOAD_ON_DEMAND == "ondemand" and mem_flag == "inmemory":
@@ -711,8 +750,8 @@ def get_balanced_dataset(in_memory=False, TMP_WHOLE_UNBALANCED = False):
     dataLoader = DataLoader.DataLoader(settings)
     debugger = Debugger.Debugger(settings)
 
-    h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5"
-    #h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256_SMALLER.h5"
+    #h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256.h5"
+    h5_file = settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL3.0_1.0_sel2144_res256x256_SMALLER.h5"
 
     datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(settings, dataLoader, "256_cleanManual")
 

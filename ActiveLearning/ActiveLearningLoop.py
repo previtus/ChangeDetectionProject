@@ -26,7 +26,8 @@ parser.add_argument('-train_augmentation', help='Turn on augmentation? (one new 
 
 parser.add_argument('-AL_iterations', help='Number of iterations in the Active Learning loop', default="10")
 parser.add_argument('-AL_initialsample_size', help='Start with this many sampled images in the training set', default="100")
-parser.add_argument('-AL_testsample_size', help='Have this many balanced sample images in the testing set', default="250")
+parser.add_argument('-AL_testsample_size', help='Have this many balanced sample images in the testing set (used for plots)', default="200")
+parser.add_argument('-AL_valsample_size', help='Have this many balanced sample images in the validation set (used for automatic thr choice and val errs)', default="200")
 parser.add_argument('-AL_iterationsample_size', help='Add this many images in each iteration', default="100")
 
 parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "Ensemble")', default="Random")
@@ -34,6 +35,7 @@ parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "
 parser.add_argument('-AL_Ensemble_numofmodels', help='If we chose Ensemble, how many models are there?', default="3")
 
 parser.add_argument('-DEBUG_remove_from_dataset', help='Debug to remove random samples without change from the original dataset...', default="40000")
+parser.add_argument('-DEBUG_loadLastALModels', help='Debug function - load last saved model weights instead of training ...', default="False")
 
 def main(args):
     args_txt = str(args)
@@ -55,7 +57,8 @@ def main(args):
     # we have approx this ratio in our data 1072 : 81592
 
     INITIAL_SAMPLE_SIZE = int(args.AL_initialsample_size) #100
-    TEST_SAMPLE_SIZE = int(args.AL_testsample_size) #250
+    TEST_SAMPLE_SIZE = int(args.AL_testsample_size) #200
+    VAL_SAMPLE_SIZE = int(args.AL_valsample_size) #200
     ITERATION_SAMPLE_SIZE = int(args.AL_iterationsample_size) #100
 
 
@@ -66,17 +69,23 @@ def main(args):
 
 
     REMOVE_SIZE = int(args.DEBUG_remove_from_dataset)
-
+    DEBUG_loadLastALModels = (args.DEBUG_loadLastALModels == 'True')
+    DEBUG_skip_evaluation = False
+    threshold_fineness = 0.05 # default
 
     # LOCAL OVERRIDES:
-
-    acquisition_function_mode = "Random"
+    """
+    acquisition_function_mode = "Ensemble"
     ModelEnsemble_N = 1
     INITIAL_SAMPLE_SIZE = 600
     N_ITERATIONS = 2
     epochs = 35
-    REMOVE_SIZE = 0
-
+    REMOVE_SIZE = 75000
+    DEBUG_loadLastALModels = True
+    DEBUG_skip_evaluation = True # won't save the plots, but jumps directly to the AL acquisition functions
+    
+    threshold_fineness = 0.1 # 0.05 makes nicer plots
+    """
     ## Loop starts with a small train set (INITIAL_SAMPLE_SIZE)
     ## then adds some number every iteration (ITERATION_SAMPLE_SIZE)
     ## also every iteration tests on a selected test sample
@@ -87,8 +96,8 @@ def main(args):
 
     #in_memory = False
     in_memory = True # when it all fits its much faster
-    RemainingUnlabeledSet = get_balanced_dataset(in_memory)
-    #RemainingUnlabeledSet = get_unbalanced_dataset()
+    #RemainingUnlabeledSet = get_balanced_dataset(in_memory)
+    RemainingUnlabeledSet = get_unbalanced_dataset()
 
     # HAX
     print("-----------------------------")
@@ -100,19 +109,33 @@ def main(args):
     RemainingUnlabeledSet.report()
     print("-----------------------------")
 
+    # TODO: ALLOW LOADING TEST+VAL FROM PRECOMPUTED h5 FILES TOO (for server deplyment)
+    # TODO: INITIAL TRAIN SET also needs it
+    # TODO: so .... allow loading from the Chunks
 
     settings = RemainingUnlabeledSet.settings
     TestSet = LargeDatasetHandler_AL(settings, "inmemory")
     #selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(TEST_SAMPLE_SIZE)
     selected_indices = RemainingUnlabeledSet.sample_random_indice_subset_balanced_classes(TEST_SAMPLE_SIZE, 0.5) # should be balanced
-
     packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
-
     TestSet.add_items(packed_items)
     print("Test set:")
     TestSet.report()
-    N_change, N_nochange = TestSet.report_balance_of_class_labels()
-    print("are we balanced in the test set?? Change:NoChange",N_change, N_nochange)
+    N_change_test, N_nochange_test = TestSet.report_balance_of_class_labels()
+    print("are we balanced in the test set?? Change:NoChange",N_change_test, N_nochange_test)
+
+
+
+    ValSet = LargeDatasetHandler_AL(settings, "inmemory")
+    selected_indices = RemainingUnlabeledSet.sample_random_indice_subset_balanced_classes(VAL_SAMPLE_SIZE, 0.5) # should be balanced
+    packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
+    ValSet.add_items(packed_items)
+    print("Validation set:")
+    ValSet.report()
+    N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
+    print("are we balanced in the val set?? Change:NoChange",N_change_val, N_nochange_val)
+
+
 
     TrainSet = LargeDatasetHandler_AL(settings, "inmemory")
 
@@ -126,20 +149,29 @@ def main(args):
     # === Model and preprocessors
 
     test_data, test_paths, _ = TestSet.get_all_data_as_arrays()
+    val_data, val_paths, _ = ValSet.get_all_data_as_arrays()
 
     dataPreprocesser = DataPreprocesser_dataIndependent(settings, number_of_channels=4)
     trainTestHandler = TrainTestHandler(settings)
     evaluator = Evaluator(settings)
 
     # === Start looping:
-    recalls = []
-    precisions = []
-    accuracies = []
-    f1s = []
+    tiles_recalls = []
+    tiles_precisions = []
+    tiles_accuracies = []
+    tiles_f1s = []
+
+    tiles_thresholds = []
+
+    pixels_recalls = []
+    pixels_precisions = []
+    pixels_accuracies = []
+    pixels_f1s = []
+    pixels_AUCs = []
+
+    pixels_thresholds = []
+
     xs_number_of_data = []
-
-    thresholds = []
-
     Ns_changed = []
     Ns_nochanged = []
 
@@ -184,9 +216,11 @@ def main(args):
         # non destructive copies of the sets
         processed_train = dataPreprocesser.apply_on_a_set_nondestructively(train_data)
         processed_test = dataPreprocesser.apply_on_a_set_nondestructively(test_data)
+        processed_val = dataPreprocesser.apply_on_a_set_nondestructively(val_data)
 
         print("Train shapes:", processed_train[0].shape, processed_train[1].shape, processed_train[2].shape)
         print("Test shapes:", processed_test[0].shape, processed_test[1].shape, processed_test[2].shape)
+        print("Val shapes:", processed_val[0].shape, processed_val[1].shape, processed_val[2].shape)
 
         # Init model
         #ModelHandler = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
@@ -195,7 +229,10 @@ def main(args):
         ModelEnsemble = []
         Separate_Train_Eval__TrainAndSave = True # < we want to train new ones every iteration
         TMP__DontSave = False
-        #Separate_Train_Eval__TrainAndSave = False # < this loads from the last interation (kept in case of mem errs)
+        TMP__DontSave = True # < dont save
+        Separate_Train_Eval__TrainAndSave = False # < this loads from the last interation (kept in case of mem errs)
+
+        Separate_Train_Eval__TrainAndSave = not DEBUG_loadLastALModels # True in the command line means loading the file ...
 
         for i in range(ModelEnsemble_N):
             modelHandler = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
@@ -247,27 +284,33 @@ def main(args):
                 modelHandler.load(root+"initTests_"+str(i))
 
 
-        print("Now I would test ...")
+        if not DEBUG_skip_evaluation:
+            print("Now I would test ...")
 
-        models = []
-        for i in range(ModelEnsemble_N):
-            models.append( ModelEnsemble[i].model )
+            models = []
+            for i in range(ModelEnsemble_N):
+                models.append( ModelEnsemble[i].model )
 
-        statistics = evaluator.unified_test_report(models, processed_test, postprocessor=dataPreprocesser,
-                                                   name=DEBUG_SAVE_ALL_THR_PLOTS,
-                                                   optionally_save_missclassified=True)
+            statistics = evaluator.unified_test_report(models, processed_test, validation_set=processed_val, postprocessor=dataPreprocesser,
+                                                       name=DEBUG_SAVE_ALL_THR_PLOTS,
+                                                       optionally_save_missclassified=True, threshold_fineness = threshold_fineness)
 
-        mask_stats, tiles_stats = statistics
-        tiles_best_thr, tiles_selected_recall, tiles_selected_precision, tiles_selected_accuracy, tiles_selected_f1 = tiles_stats
-        pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1 = mask_stats
+            mask_stats, tiles_stats = statistics
+            tiles_best_thr, tiles_selected_recall, tiles_selected_precision, tiles_selected_accuracy, tiles_selected_f1 = tiles_stats
+            pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1, pixels_auc = mask_stats
 
-        # TODO: I SHOULD SAVE BOTH
+            pixels_recalls.append(pixels_selected_recall)
+            pixels_precisions.append(pixels_selected_precision)
+            pixels_accuracies.append(pixels_selected_accuracy)
+            pixels_f1s.append(pixels_selected_f1)
+            pixels_AUCs.append(pixels_auc)
+            pixels_thresholds.append(pixels_best_thr)
 
-        recalls.append(pixels_selected_recall)
-        precisions.append(pixels_selected_precision)
-        accuracies.append(pixels_selected_accuracy)
-        f1s.append(pixels_selected_f1)
-        thresholds.append(pixels_best_thr)
+            tiles_recalls.append(tiles_selected_recall)
+            tiles_precisions.append(tiles_selected_precision)
+            tiles_accuracies.append(tiles_selected_accuracy)
+            tiles_f1s.append(tiles_selected_f1)
+            tiles_thresholds.append(tiles_best_thr)
 
         print("Add new samples as per AL paradigm ... acquisition_function_mode=",acquisition_function_mode)
 
@@ -281,12 +324,16 @@ def main(args):
             # BATCH THIS ENTIRE SEGMENT
             PER_BATCH = 2048 # Depends on memory really ...
 
+            # Yields a large batch sample
+            #for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly'): <<<<< This is faster if we are on local PC and load relatively small amount of images.
             for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly_LOADBATCHFILES'): # Yields a large batch sample
                 remaining_indices = batch[0]
                 if len(remaining_indices) == 0:
                     print("Everything from this batch was deleted (during loading batchfiles), skipping to the next one...")
                     continue
                 remaining_data = batch[1]  # lefts and rights, no labels!
+                print("report on sizes of the batch = len(remaining_indices)", len(remaining_indices), "len(left)=len(remaining_data[0])=", len(remaining_data[0]))
+
                 print("MegaBatch (",len(entropies_over_samples),"/",RemainingUnlabeledSet.N_of_data,") of size ", len(remaining_indices), " = indices from id", remaining_indices[0], "to id", remaining_indices[-1])
                 processed_remaining = dataPreprocesser.apply_on_a_set_nondestructively(remaining_data, no_labels=True)
 
@@ -314,7 +361,7 @@ def main(args):
                     #test_L = test_L[0:subs]
                     #test_R = test_R[0:subs]
 
-                    print("Predicting for", nth, "model in the ensemble - for disagreement calculations")
+                    print("Predicting for", nth, "model in the ensemble - for disagreement calculations (on predicted size=",len(test_L),")")
                     predicted = model.predict(x=[test_L, test_R], batch_size=4)
                     predicted = predicted[:, :, :, 1] # 2 channels of softmax with 2 classes is useless - use just one
 
@@ -464,38 +511,47 @@ def main(args):
         print("This iteration took "+str(time)+"s ("+str(time/60.0)+"min)")
 
         # Cheeky save per each iteration (so we can reconstruct old / broken plots)
-        statistics = thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged
+        pixel_statistics = pixels_thresholds, xs_number_of_data, pixels_recalls, pixels_precisions, pixels_accuracies, pixels_f1s, Ns_changed, Ns_nochanged, pixels_AUCs
+        tile_statistics = tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged
+        statistics = pixel_statistics, tile_statistics
         statistics = np.asarray(statistics)
         np.save("["+args.name+"]_al_statistics.npy", statistics)
 
     #- AL outline, have two sets - TrainSet and UnlabeledSet and move data in between them... (always everything we have?)
     #2b.) Acquisition function to select subset of the RemainingUnlabeledSet -> move it to the TrainSet
 
-    statistics = thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged
+    pixel_statistics = pixels_thresholds, xs_number_of_data, pixels_recalls, pixels_precisions, pixels_accuracies, pixels_f1s, Ns_changed, Ns_nochanged, pixels_AUCs
+    tile_statistics = tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged
+    statistics = pixel_statistics, tile_statistics
     statistics = np.asarray(statistics)
     np.save("["+args.name+"]_al_statistics.npy", statistics)
     #####statistics = np.load("al_statistics.npy")
 
-    thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged = statistics
+    pixel_statistics, tile_statistics = statistics
+    pixels_thresholds, xs_number_of_data, pixels_recalls, pixels_precisions, pixels_accuracies, pixels_f1s, Ns_changed, Ns_nochanged, pixels_AUCs = pixel_statistics
+    tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged = tile_statistics
 
-    print("thresholds:", thresholds)
+    # PIXELS
+    print("pixels_thresholds:", pixels_thresholds)
 
     print("xs_number_of_data:", xs_number_of_data)
-    print("recalls:", recalls)
-    print("precisions:", precisions)
-    print("accuracies:", accuracies)
-    print("f1s:", f1s)
+    print("pixels_recalls:", pixels_recalls)
+    print("pixels_precisions:", pixels_precisions)
+    print("pixels_accuracies:", pixels_accuracies)
+    print("pixels_f1s:", pixels_f1s)
+    print("pixels_AUCs:", pixels_AUCs)
 
     print("Ns_changed:", Ns_changed)
     print("Ns_nochanged:", Ns_nochanged)
 
     plt.figure(figsize=(7, 7)) # w, h
-    plt.plot(xs_number_of_data, thresholds, color='black', label="thresholds")
+    plt.plot(xs_number_of_data, pixels_thresholds, color='black', label="thresholds")
 
-    plt.plot(xs_number_of_data, recalls, color='red', marker='o', label="recalls")
-    plt.plot(xs_number_of_data, precisions, color='blue', marker='o', label="precisions")
-    plt.plot(xs_number_of_data, accuracies, color='green', marker='o', label="accuracies")
-    plt.plot(xs_number_of_data, f1s, color='orange', marker='o', label="f1s")
+    plt.plot(xs_number_of_data, pixels_recalls, color='red', marker='o', label="recalls")
+    plt.plot(xs_number_of_data, pixels_precisions, color='blue', marker='o', label="precisions")
+    plt.plot(xs_number_of_data, pixels_accuracies, color='green', marker='o', label="accuracies")
+    plt.plot(xs_number_of_data, pixels_f1s, color='orange', marker='o', label="f1s")
+    plt.plot(xs_number_of_data, pixels_AUCs, color='magenta', marker='o', label="AUCs")
 
     #plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
 
@@ -503,6 +559,34 @@ def main(args):
     plt.ylim(0.0, 1.0)
 
     plt.savefig("["+args.name+"]_dbg_last_al_big_plot_pixelsScores.png")
+    plt.close()
+
+    # TILES
+    print("tiles_thresholds:", tiles_thresholds)
+
+    print("xs_number_of_data:", xs_number_of_data)
+    print("tiles_recalls:", tiles_recalls)
+    print("tiles_precisions:", tiles_precisions)
+    print("tiles_accuracies:", tiles_accuracies)
+    print("tiles_f1s:", tiles_f1s)
+
+    print("Ns_changed:", Ns_changed)
+    print("Ns_nochanged:", Ns_nochanged)
+
+    plt.figure(figsize=(7, 7)) # w, h
+    plt.plot(xs_number_of_data, tiles_thresholds, color='black', label="thresholds")
+
+    plt.plot(xs_number_of_data, tiles_recalls, color='red', marker='o', label="recalls")
+    plt.plot(xs_number_of_data, tiles_precisions, color='blue', marker='o', label="precisions")
+    plt.plot(xs_number_of_data, tiles_accuracies, color='green', marker='o', label="accuracies")
+    plt.plot(xs_number_of_data, tiles_f1s, color='orange', marker='o', label="f1s")
+
+    #plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
+
+    plt.legend()
+    plt.ylim(0.0, 1.0)
+
+    plt.savefig("["+args.name+"]_dbg_last_al_big_plot_tilesScores.png")
     plt.close()
 
 
