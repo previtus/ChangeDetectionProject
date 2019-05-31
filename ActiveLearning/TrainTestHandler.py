@@ -225,47 +225,6 @@ class TrainTestHandler(object):
         return history, broken_flag
 
 
-    def test_oldBack(self, model, testing_set, evaluator, postprocessor, auto_thr=False, DEBUG_SAVE_ALL_THR_PLOTS=None):
-        print("Testing model:",model,"on test set (size", len(testing_set[0]),")")
-
-        test_L, test_R, test_V = testing_set
-
-        if test_L.shape[3] > 3:
-            # 3 channels only - rgb
-            test_L = test_L[:,:,:,1:4]
-            test_R = test_R[:,:,:,1:4]
-        # label also reshape
-        test_V_cat = to_categorical(test_V)
-
-        predicted = model.predict(x=[test_L, test_R], batch_size=4)
-        #metrics = self.model.evaluate(x=[test_L, test_R], y=test_V_cat, verbose=0, batch_size=4)
-        #metrics_info = self.model.metrics_names
-        #print(list(zip(metrics_info, metrics)))
-
-        # with just 2 classes I can hax:
-        predicted = predicted[:, :, :, 1]
-
-        predicted = postprocessor.postprocess_labels(predicted)
-
-        if auto_thr:
-            best_thr, recall, precision, accuracy, f1 = evaluator.metrics_autothr_f1_max(predicted, test_V)
-            print("Threshold automatically chosen as", best_thr)
-            threshold = best_thr
-        else:
-            threshold = 0.5 # 0.01 was too close
-            # 0.01 and 0.1 was bad!
-            recall, precision, accuracy, f1 = evaluator.calculate_recall_precision_accuracy(predicted, test_V, threshold=threshold, need_f1=True)
-
-        # maybe call:
-        if DEBUG_SAVE_ALL_THR_PLOTS is not None:
-            show = False
-            save = True
-            name = DEBUG_SAVE_ALL_THR_PLOTS
-            jump_by = 0.1 # 0.01
-            evaluator.try_all_thresholds(predicted, test_V, np.arange(0.0, 1.0, jump_by),title_txt="Masks (all pixels 0/1) evaluated [Change Class]",
-                                         show=show, save=save, name=name)
-
-        return recall, precision, accuracy, f1, threshold
 
     #####  tests of how BN behaves >>>> (might be del afterwards ...)
 
