@@ -18,7 +18,7 @@ def main():
 
     """
     PER_BATCH = 2048 # How big files would we like ? test with smaller and if we can move that comfortably to a server ...
-    for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH,mode='SAVEBATCHFILES'):
+    for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH,mode='SAVEBATCHFILES', skip_i_batches=40):
         print(">>>>>>>>>>>>>>>>>>>>>>>>> processed batch " + batch)
 
         #break
@@ -38,10 +38,15 @@ def main():
 
         print("L", L.shape, "R", R.shape)
 
+        del L
+        del R
+        del remaining_data
+        del remaining_indices
+        del batch
 
-        k += 1
-        if k > 10:
-            break
+        #k += 1
+        #if k > 10:
+        #    break
 
 if __name__ == '__main__':
     start = timer()
