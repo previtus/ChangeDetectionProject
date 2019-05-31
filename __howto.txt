@@ -20,6 +20,8 @@ pip3 install opencv-python --user
 pip3 install seaborn --user
 pip3 install tqdm --user
 pip3 install albumentations --user
+pip install -U scikit-learn --user
+pip install -U scikit-image==0.14.2 --user
 
 bsub (...)
 
