@@ -583,6 +583,40 @@ class Evaluator(object):
 
         return np.array(class_labels)
 
+    def human_legible_as_a_plot(self, predicted_orig, labels_orig, recalls, thresholds, plot_filename=""):
+        # Plot x=wanted_recall, y=cost (as % of the orig dataset needed to check)
+
+        ys = []
+        wanted_txt = ""
+        for thr in thresholds:
+            wanted_recall = thr
+
+            txt, cost_perc = self.human_legible_tiles_report(predicted_orig, labels_orig, wanted_recall, recalls, thresholds)
+            wanted_txt += txt
+
+            ys.append(cost_perc)
+
+        xs = thresholds
+
+        plt.figure() # figsize=(w, h)
+
+        print("xs", len(xs), xs)
+        print("ys", len(ys), ys)
+        lw = 2
+
+        plt.title('Cost for given wanted recall')
+        plt.xlabel('wanted recall')
+        plt.ylabel('cost (in percents of the original dataset)')
+
+        plt.plot(xs, ys, color='red', marker='o', lw=lw, label="Cost")
+        plt.legend()
+
+        plt.ylim(0.0, 100.0) # in percent
+
+        plt.savefig(plot_filename+'_Costs.png')
+        plt.close()
+
+        return wanted_txt
 
     def human_legible_tiles_report(self, predicted_orig, labels_orig, wanted_recall, recalls, thresholds):
 
@@ -622,13 +656,14 @@ class Evaluator(object):
                     best_recall_cost = cost_r
                     best_recall_idx = i
 
+        cost_perc = 100*(best_recall_cost/N)
         report_str = "If we want the recall to be better than "+str(wanted_recall)+\
                      ", we need to set the threshold to be = "+str(thresholds[best_recall_idx])+" which will give us " \
                      "recall of "+str(recalls[best_recall_idx])+" while the number of tiles needed to check is "+\
-                     str(best_recall_cost)+" from the worst case scenario "+str(N)+" (that's "+str(np.round(100*(best_recall_cost/N), 2))+"%).\n\n"
+                     str(best_recall_cost)+" from the worst case scenario "+str(N)+" (that's "+str(np.round(cost_perc, 2))+"%).\n\n"
 
         print(report_str)
-        return report_str
+        return report_str, cost_perc
 
     # ================= Unified test func call:
 
@@ -676,7 +711,7 @@ class Evaluator(object):
             print("predicted_ITHINK.shape", predicted_ITHINK.shape, "should be the same as", predicted.shape)
             print("first pixels")
             for i in range(len(ensemble_predictions)):
-                print(ensemble_predictions[i][0][0])
+                print(ensemble_predictions[i][0][0][0])
             print("avg into")
             print(predicted_ITHINK[0][0][0])
             print("right? (they should!)")
@@ -875,29 +910,11 @@ class Evaluator(object):
         self.text_report(predicted, test_V, tiles_best_thr, save_text_file=name + "Tiles.txt", as_tiles=True)
 
         wanted_txt = ""
-        wanted_recall = 0.1
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.3
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.5
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.7
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.75
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.8
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.85
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.9
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
-        wanted_recall = 0.95
-        wanted_txt += self.human_legible_tiles_report(predicted, test_V, wanted_recall, tiles_ys_recalls, tiles_xs_tresholds)
+        wanted_txt += self.human_legible_as_a_plot(predicted, test_V, tiles_ys_recalls, tiles_xs_tresholds, plot_filename=name)
 
         file = open(name + "HumanLegible.txt", "w")
         file.write(wanted_txt)
         file.close()
-
 
 
         # save missclassifications (optionally)
