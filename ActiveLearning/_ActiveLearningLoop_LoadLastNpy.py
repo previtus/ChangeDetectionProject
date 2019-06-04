@@ -44,31 +44,36 @@ def main(args):
     import matplotlib.pyplot as plt
     import numpy as np
 
-    args.name = "TryingEnsembleOnFullUnbalancedInit"
-    path_to_the_corresponding_statistics_file = "/home/ruzickav/python_projects/ChangeDetectionProject/ActiveLearning/_[!]May29plot_Ensemble_50ep_4batchs_10it_3models__UnbalancedInit100_add100_test250_Random0/[TryingEnsembleOnFullUnbalancedInit]_al_statistics.npy"
+    args.name = "May31EnsembleFullUnbalanced20It_AugOn"
+    path_to_the_corresponding_statistics_file = "/home/ruzickav/python_projects/ChangeDetectionProject/ActiveLearning/_June1st_longRunResults/__serverRuns/_(unfinished)/[May31EnsembleFullUnbalanced20It_AugOn]_al_statistics.npy"
 
     statistics = np.load(path_to_the_corresponding_statistics_file)
 
-    thresholds, xs_number_of_data, recalls, precisions, accuracies, f1s, Ns_changed, Ns_nochanged = statistics
+    pixel_statistics, tile_statistics = statistics
+    pixels_thresholds, xs_number_of_data, pixels_recalls, pixels_precisions, pixels_accuracies, pixels_f1s, Ns_changed, Ns_nochanged, pixels_AUCs = pixel_statistics
+    tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged = tile_statistics
 
-    print("thresholds:", thresholds)
+    # PIXELS
+    print("pixels_thresholds:", pixels_thresholds)
 
     print("xs_number_of_data:", xs_number_of_data)
-    print("recalls:", recalls)
-    print("precisions:", precisions)
-    print("accuracies:", accuracies)
-    print("f1s:", f1s)
+    print("pixels_recalls:", pixels_recalls)
+    print("pixels_precisions:", pixels_precisions)
+    print("pixels_accuracies:", pixels_accuracies)
+    print("pixels_f1s:", pixels_f1s)
+    print("pixels_AUCs:", pixels_AUCs)
 
     print("Ns_changed:", Ns_changed)
     print("Ns_nochanged:", Ns_nochanged)
 
     plt.figure(figsize=(7, 7)) # w, h
-    plt.plot(xs_number_of_data, thresholds, color='black', label="thresholds")
+    plt.plot(xs_number_of_data, pixels_thresholds, color='black', label="thresholds")
 
-    plt.plot(xs_number_of_data, recalls, color='red', marker='o', label="recalls")
-    plt.plot(xs_number_of_data, precisions, color='blue', marker='o', label="precisions")
-    plt.plot(xs_number_of_data, accuracies, color='green', marker='o', label="accuracies")
-    plt.plot(xs_number_of_data, f1s, color='orange', marker='o', label="f1s")
+    plt.plot(xs_number_of_data, pixels_recalls, color='red', marker='o', label="recalls")
+    plt.plot(xs_number_of_data, pixels_precisions, color='blue', marker='o', label="precisions")
+    plt.plot(xs_number_of_data, pixels_accuracies, color='green', marker='o', label="accuracies")
+    plt.plot(xs_number_of_data, pixels_f1s, color='orange', marker='o', label="f1s")
+    plt.plot(xs_number_of_data, pixels_AUCs, color='magenta', marker='o', label="AUCs")
 
     #plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
 
@@ -76,6 +81,34 @@ def main(args):
     plt.ylim(0.0, 1.0)
 
     plt.savefig("["+args.name+"]_dbg_last_al_big_plot_pixelsScores.png")
+    plt.close()
+
+    # TILES
+    print("tiles_thresholds:", tiles_thresholds)
+
+    print("xs_number_of_data:", xs_number_of_data)
+    print("tiles_recalls:", tiles_recalls)
+    print("tiles_precisions:", tiles_precisions)
+    print("tiles_accuracies:", tiles_accuracies)
+    print("tiles_f1s:", tiles_f1s)
+
+    print("Ns_changed:", Ns_changed)
+    print("Ns_nochanged:", Ns_nochanged)
+
+    plt.figure(figsize=(7, 7)) # w, h
+    plt.plot(xs_number_of_data, tiles_thresholds, color='black', label="thresholds")
+
+    plt.plot(xs_number_of_data, tiles_recalls, color='red', marker='o', label="recalls")
+    plt.plot(xs_number_of_data, tiles_precisions, color='blue', marker='o', label="precisions")
+    plt.plot(xs_number_of_data, tiles_accuracies, color='green', marker='o', label="accuracies")
+    plt.plot(xs_number_of_data, tiles_f1s, color='orange', marker='o', label="f1s")
+
+    #plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
+
+    plt.legend()
+    plt.ylim(0.0, 1.0)
+
+    plt.savefig("["+args.name+"]_dbg_last_al_big_plot_tilesScores.png")
     plt.close()
 
 
@@ -93,11 +126,6 @@ def main(args):
 
     plt.savefig("["+args.name+"]_dbg_last_al_balance_plot.png")
     plt.close()
-
-    print("Ensemble tested on completely unbalanced!")
-    print("Trying one with 1k to 40k balance and having it run properly - for few iterations at least -> later compare that between methods")
-
-
 
 
 

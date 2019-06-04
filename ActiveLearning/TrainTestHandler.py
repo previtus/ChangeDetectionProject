@@ -15,10 +15,15 @@ class TrainTestHandler(object):
         self.settings = settings
         self.debugger = Debugger.Debugger(settings)
 
-    def train(self, model, training_set, epochs, batch, verbose = 1, augmentation = False, DEBUG_POSTPROCESSER = None):
+    def train(self, model, training_set, validation_set, epochs, batch, verbose = 1, augmentation = False, DEBUG_POSTPROCESSER = None, name=""):
         print("Training model:",model,"on training set (size", len(training_set[0]), "), Augment=",augmentation)
 
         train_L, train_R, train_V = training_set
+        val_L, val_R, val_V = validation_set
+        if val_L.shape[3] > 3:
+            # 3 channels only - rgb
+            val_L = val_L[:, :, :, 1:4]
+            val_R = val_R[:, :, :, 1:4]
 
         # 3 channels only - rgb
         if train_L.shape[3] > 3:
@@ -159,13 +164,9 @@ class TrainTestHandler(object):
 
 
         train_V = train_V.reshape(train_V.shape + (1,))
-
-        # always softmax ...
-        #self.use_sigmoid_or_softmax = 'softmax'
-        #assert self.use_sigmoid_or_softmax == 'softmax'
-        #if self.use_sigmoid_or_softmax == 'softmax':
-
+        val_V = val_V.reshape(val_V.shape + (1,))
         train_V = to_categorical(train_V)
+        val_V = to_categorical(val_V)
 
         if verbose > 2:
             print("label images categorical (train)")
@@ -173,7 +174,14 @@ class TrainTestHandler(object):
 
         broken_flag = False
 
+        history = model.fit([train_L, train_R], train_V, batch_size=batch, epochs=epochs, verbose=2,
+                                         validation_data=([val_L, val_R], val_V) )#, callbacks=callbacks
 
+        history.history["acc"] = history.history["categorical_accuracy"]  # we care about this one to show
+        history.history["val_acc"] = history.history["val_categorical_accuracy"]
+
+        print(history.history)
+        self.debugger.nice_plot_history(history,added_plots = [], save=True, show=False, name=name+"_training")
 
         return history, broken_flag
 

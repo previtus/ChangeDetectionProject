@@ -21,6 +21,7 @@ parser.add_argument('-name', help='run name - will output in this dir', default=
 
 parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="50")
 parser.add_argument('-model_batchsize', help='How big batch size for each model? (This is limited by the GPUs memory)', default="4")
+parser.add_argument('-model_backbone', help='Encoder', default="resnet34")
 
 parser.add_argument('-train_augmentation', help='Turn on augmentation? (one new image for each image in the train set - effectively doubling the dataset size)', default="False")
 
@@ -41,6 +42,13 @@ def main(args):
     args_txt = str(args)
     print(args_txt)
 
+    import random
+    import numpy
+    seed_num = 30
+    random.seed(seed_num) # samples
+    numpy.random.seed(seed_num) # shuffles
+    # keras and it's training is not influenced by this
+
     #import tensorflow as tf
     #config = tf.ConfigProto()
     #config.gpu_options.allow_growth=True
@@ -50,6 +58,7 @@ def main(args):
     epochs = int(args.model_epochs) # 50
     batch_size = int(args.model_batchsize) # 4
     augmentation = (args.train_augmentation == 'True') #False
+    model_backbone = "resnet34"
 
 
     """ ACTIVE LEARNING """
@@ -117,6 +126,7 @@ def main(args):
     TestSet = LargeDatasetHandler_AL(settings, "inmemory")
     #selected_indices = RemainingUnlabeledSet.sample_random_indice_subset(TEST_SAMPLE_SIZE)
     selected_indices = RemainingUnlabeledSet.sample_random_indice_subset_balanced_classes(TEST_SAMPLE_SIZE, 0.5) # should be balanced
+    print("test set indices >> ", selected_indices)
     packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
     TestSet.add_items(packed_items)
     print("Test set:")
@@ -223,7 +233,7 @@ def main(args):
         print("Val shapes:", processed_val[0].shape, processed_val[1].shape, processed_val[2].shape)
 
         # Init model
-        #ModelHandler = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
+        #ModelHandler = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
         #model = ModelHandler.model
 
         ModelEnsemble = []
@@ -235,7 +245,7 @@ def main(args):
         Separate_Train_Eval__TrainAndSave = not DEBUG_loadLastALModels # True in the command line means loading the file ...
 
         for i in range(ModelEnsemble_N):
-            modelHandler = ModelHandler_dataIndependent(settings, BACKBONE='resnet34')
+            modelHandler = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
             ModelEnsemble.append(modelHandler)
             # These models have the same encoder part (same weights as loaded from the imagenet pretrained model)
             # ... however their decoder parts are initialized differently.
@@ -262,7 +272,7 @@ def main(args):
             for i in range(ModelEnsemble_N):
                 print("Training model",i,"in the ensemble (out of",ModelEnsemble_N,"):")
 
-                _, broken_flag = trainTestHandler.train(ModelEnsemble[i].model, processed_train, epochs, batch_size, augmentation = augmentation, DEBUG_POSTPROCESSER=dataPreprocesser)
+                history, broken_flag = trainTestHandler.train(ModelEnsemble[i].model, processed_train, processed_val, epochs, batch_size, augmentation = augmentation, DEBUG_POSTPROCESSER=dataPreprocesser, name=DEBUG_SAVE_ALL_THR_PLOTS+"_model_"+str(i))
 
             if broken_flag:
                 print("Got as far as until AL iteration:", active_learning_iteration, " ... now breaking")

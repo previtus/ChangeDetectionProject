@@ -1,4 +1,8 @@
 # === Initialize sets - Unlabeled, Train and Test
+import matplotlib, os
+if not('DISPLAY' in os.environ):
+    matplotlib.use("Agg")
+
 import keras
 from ActiveLearning.LargeDatasetHandler_AL import get_balanced_dataset, get_unbalanced_dataset
 from ActiveLearning.LargeDatasetHandler_AL import LargeDatasetHandler_AL
@@ -21,6 +25,7 @@ parser.add_argument('-name', help='run name - will output in this dir', default=
 
 parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="50")
 parser.add_argument('-model_batchsize', help='How big batch size for each model? (This is limited by the GPUs memory)', default="4")
+parser.add_argument('-model_backbone', help='Encoder', default="resnet34")
 
 parser.add_argument('-train_augmentation', help='Turn on augmentation? (one new image for each image in the train set - effectively doubling the dataset size)', default="False")
 
