@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 from skimage import io
 
+SERVER_HAX = False
 
 def save_images_to_h5_DEFAULT_DATA_FORMAT(lefts, rights, labels, hdf5_path):
     SUBSET = len(lefts)
@@ -65,6 +66,11 @@ def load_vector_image(filename, IMAGE_RESOLUTION=256):
         arr = np.zeros((IMAGE_RESOLUTION, IMAGE_RESOLUTION), dtype=float)
         return arr
 
+    if SERVER_HAX:
+        if "/home/pf/pfstaff/projects/ruzicka/" in filename:
+            ## /home/pf/pfstaff/projects/ruzicka/CleanedVectors_manually_256x256_32over/
+            filename = "/cluster/work/igp_psr/ruzickav/ChangeDetectionProject_files/entire_dataset_files"+filename[33:] # starts with "/CleanedVectors_manually_256x256_32over...
+
     img = io.imread(filename)
     arr = np.asarray(img)
 
@@ -79,6 +85,10 @@ def load_vector_image(filename, IMAGE_RESOLUTION=256):
 
 
 def load_raster_image(filename):
+    if SERVER_HAX:
+        if "/home/pf/pfstaff/projects/ruzicka/" in filename:
+            filename = "/cluster/work/igp_psr/ruzickav/ChangeDetectionProject_files/entire_dataset_files"+filename[33:] # starts with "/TiledDataset_256x256_32ov...
+
     img = io.imread(filename)
     arr = np.asarray(img)
     return arr
