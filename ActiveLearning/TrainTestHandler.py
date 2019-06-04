@@ -174,53 +174,6 @@ class TrainTestHandler(object):
         broken_flag = False
 
 
-        BIG_BATCHES = False
-        # POSSIBLY MESSES IT UP:
-        if BIG_BATCHES:
-            # INSTEAD WITH BIG BATCHES ? - test if this can save us from GPU MEM problems
-            for epoch in range(epochs):
-                print("epoch %d" % epoch)
-
-                big_batch_size = 500
-                # we have len(train_V) data, we want to split it into batches ...
-                start_i = 0
-                total_N = len(train_V)
-                while start_i < total_N:
-                    end_i = start_i + big_batch_size
-                    if end_i > total_N:
-                        end_i = total_N
-
-                    batch_train_L = train_L[start_i:end_i]
-                    batch_train_R = train_R[start_i:end_i]
-                    batch_train_V = train_V[start_i:end_i]
-                    print("minibatch of", len(batch_train_L))
-
-                    model.fit([batch_train_L, batch_train_R], batch_train_V, batch_size=batch, epochs=1, verbose=2)
-
-                    start_i += big_batch_size
-
-            history = None
-
-        # try:
-        #    for batch in TrainSet.generator_for_all_images(500, mode='datalabels'):  # Yields a large batch sample
-        #        indices = batch[0]
-        #        print("indices from", indices[0], "to", indices[-1])
-
-        else:
-
-            if True:
-                #try:
-                history = model.fit([train_L, train_R], train_V, batch_size=batch, epochs=epochs, verbose=2)
-                #                         validation_data=([val_L, val_R], val_V), callbacks=callbacks
-
-            """
-            except Exception as e:
-                print("Exception caught when trying to TRAIN:", e)
-                print("Killing anyway ...")
-                #assert False
-                history = None
-                broken_flag = True
-            """
 
         return history, broken_flag
 
