@@ -702,20 +702,20 @@ class Evaluator(object):
                     ensemble_val_predictions.append(predicted_val)
 
 
-            print("TODO: mean from the predictions of an ensemble")
-            print("HAX, use just the 1st model")
-            predicted = ensemble_predictions[0]
+            #print("HAX, use just the 1st model")
+            #predicted = ensemble_predictions[0]
 
+            predicted_mean = np.mean(ensemble_predictions, axis=0)
 
-            predicted_ITHINK = np.mean(ensemble_predictions, axis=0)
-            print("predicted_ITHINK.shape", predicted_ITHINK.shape, "should be the same as", predicted.shape)
+            print("predicted_ITHINK.shape", predicted_mean.shape, "should be the same as", predicted.shape)
             print("first pixels")
             for i in range(len(ensemble_predictions)):
                 print(ensemble_predictions[i][0][0][0])
             print("avg into")
-            print(predicted_ITHINK[0][0][0])
+            print(predicted_mean[0][0][0])
             print("right? (they should!)")
 
+            predicted = predicted_mean
         else:
             predicted = models[0].predict(x=[test_L, test_R], batch_size=4)
 
