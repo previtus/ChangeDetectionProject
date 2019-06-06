@@ -85,6 +85,10 @@ def main(args):
     DEBUG_skip_evaluation = False
     threshold_fineness = 0.05 # default
 
+    # New feature, failsafe for models in Ensembles ...
+    FailSafeON = True # default
+    FailSafe__ValLossThr = 1.0 # default # maybe should be 1.5 ???
+
     # LOCAL OVERRIDES:
     """
     acquisition_function_mode = "Ensemble"
@@ -275,11 +279,30 @@ def main(args):
             for i in range(ModelEnsemble_N):
                 print("Training model",i,"in the ensemble (out of",ModelEnsemble_N,"):")
 
-                history, broken_flag = trainTestHandler.train(ModelEnsemble[i].model, processed_train, processed_val, epochs, batch_size, augmentation = augmentation, DEBUG_POSTPROCESSER=dataPreprocesser, name=DEBUG_SAVE_ALL_THR_PLOTS+"_model_"+str(i))
+                AllowedFailsafeRetrains = 4 # Not to actually get stuck
+                failed_training_flag = True # When looking at results on VAL set (don't know what would happen on TEST).
+                while failed_training_flag:
 
-            if broken_flag:
-                print("Got as far as until AL iteration:", active_learning_iteration, " ... now breaking")
-                break
+                    history, broken_flag, failed_training_flag = trainTestHandler.train(ModelEnsemble[i].model, processed_train, processed_val, epochs, batch_size,
+                                    augmentation = augmentation, DEBUG_POSTPROCESSER=dataPreprocesser, name=DEBUG_SAVE_ALL_THR_PLOTS+"_model_"+str(i),
+                                    FailSafeON=FailSafeON, FailSafe__ValLossThr=FailSafe__ValLossThr)
+                    # Maybe make a fail safe here in case the final VAL_LOSS  is too large -> reinit and retrain!
+                    # Or if the recall is basically 0.0 (failed case when the model trains to mark everything as no-change
+
+                    if failed_training_flag and AllowedFailsafeRetrains > 0:
+                        # ??? and active_learning_iteration > 0:
+                        # ??? skip 0th iteration # ... discussable as well
+                        # this failsafe works with all methods
+
+                        AllowedFailsafeRetrains -= 1
+
+                        print("Detected model training fail safe - revert the model - then retrain!")
+                        modelHandler_restart = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
+                        ModelEnsemble[i] = modelHandler_restart
+
+                if broken_flag:
+                    print("Got as far as until AL iteration:", active_learning_iteration, " ... now breaking")
+                    break
 
             if not TMP__DontSave:
                 root = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/models_in_al/"

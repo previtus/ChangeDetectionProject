@@ -15,7 +15,8 @@ class TrainTestHandler(object):
         self.settings = settings
         self.debugger = Debugger.Debugger(settings)
 
-    def train(self, model, training_set, validation_set, epochs, batch, verbose = 1, augmentation = False, DEBUG_POSTPROCESSER = None, name=""):
+    def train(self, model, training_set, validation_set, epochs, batch, verbose = 1, augmentation = False, DEBUG_POSTPROCESSER = None, name="",
+              FailSafeON=True, FailSafe__ValLossThr = 2.0 ):
         print("Training model:",model,"on training set (size", len(training_set[0]), "), Augment=",augmentation)
 
         train_L, train_R, train_V = training_set
@@ -173,6 +174,7 @@ class TrainTestHandler(object):
             self.debugger.explore_set_stats(train_V)
 
         broken_flag = False
+        failed_training_flag = False
 
         history = model.fit([train_L, train_R], train_V, batch_size=batch, epochs=epochs, verbose=2,
                                          validation_data=([val_L, val_R], val_V) )#, callbacks=callbacks
@@ -183,7 +185,16 @@ class TrainTestHandler(object):
         print(history.history)
         self.debugger.nice_plot_history(history,added_plots = [], save=True, show=False, name=name+"_training")
 
-        return history, broken_flag
+        # Fail safe - failed_training_flag
+        # if the last "val_acc" is too big
+        # (optionally) if the recall (would be) 0.0 - might need additional checks though....
+        if FailSafeON:
+            val_losses = history.history["val_loss"]
+            if val_losses[-1] > FailSafe__ValLossThr:
+                print("Fail safe activated, the last model reached final VAL_LOSS=",val_losses[-1], "(which is >",FailSafe__ValLossThr,")!")
+                failed_training_flag = True
+
+        return history, broken_flag, failed_training_flag
 
 
 
