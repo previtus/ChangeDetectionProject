@@ -74,6 +74,9 @@ def main(args):
     acquisition_function_mode = args.AL_method #"Ensemble" / "Random"
     ModelEnsemble_N = int(args.AL_Ensemble_numofmodels)
 
+    if acquisition_function_mode is not "Ensemble":
+        ModelEnsemble_N = 1
+
     ENSEMBLE_tmp_how_many_from_random = 0 # Hybridization
 
 
