@@ -294,7 +294,7 @@ class Debugger(object):
 
     ### TRAINING VISUALIZATIONS:
 
-    def nice_plot_history(self, history, added_plots = [], no_val=False, show=True, save=False, name="lastplot"):
+    def nice_plot_history(self, history, added_plots = [], no_val=False, show=True, save=False, name="lastplot", max_y = 1.0):
         fig, ax = plt.subplots()
 
         loss = history.history["loss"]
@@ -358,7 +358,7 @@ class Debugger(object):
             for item in added_plots:
                 plot_item(item, "grey")
 
-        plt.ylim(0, 1)
+        plt.ylim(0, max_y)
         plt.ylabel("Accuracy")
 
         plt.legend(loc='lower right')  # best
@@ -396,19 +396,44 @@ class Debugger(object):
 
     def save_arr(self, arr, specialname = ""):
 
-        self.mkdir(self.settings.large_file_folder+"debuggerstuffs")
-        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr"+specialname+".h5"
+        suceeded = False
 
-        hdf5_file = h5py.File(hdf5_path, mode='w')
-        hdf5_file.create_dataset("arr", data=arr, dtype="float32")
-        hdf5_file.close()
+        while not suceeded:
+            try:
 
-        print("Saved arr to:", hdf5_path)
+                self.mkdir(self.settings.large_file_folder+"debuggerstuffs")
+                hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr"+specialname+".h5"
+
+                hdf5_file = h5py.File(hdf5_path, mode='w')
+                hdf5_file.create_dataset("arr", data=arr, dtype="float32")
+                hdf5_file.close()
+
+                print("Saved arr to:", hdf5_path)
+
+                suceeded = True
+
+            except Exception as e:
+                print("exception, retrying e=",e)
+
+                suceeded = False
 
     def load_arr(self, specialname = ""):
-        hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr"+specialname+".h5"
+        suceeded = False
 
-        hdf5_file = h5py.File(hdf5_path, "r")
-        arr = hdf5_file['arr'][:]
-        hdf5_file.close()
+        while not suceeded:
+            try:
+
+                hdf5_path = self.settings.large_file_folder+"debuggerstuffs/savedarr"+specialname+".h5"
+
+                hdf5_file = h5py.File(hdf5_path, "r")
+                arr = hdf5_file['arr'][:]
+                hdf5_file.close()
+
+                suceeded = True
+
+            except Exception as e:
+                print("exception, retrying e=",e)
+
+                suceeded = False
+
         return arr

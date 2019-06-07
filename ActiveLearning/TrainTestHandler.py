@@ -183,7 +183,7 @@ class TrainTestHandler(object):
         history.history["val_acc"] = history.history["val_categorical_accuracy"]
 
         print(history.history)
-        self.debugger.nice_plot_history(history,added_plots = [], save=True, show=False, name=name+"_training")
+        self.debugger.nice_plot_history(history,added_plots = [], save=True, show=False, name=name+"_training", max_y=FailSafe__ValLossThr)
 
         # Fail safe - failed_training_flag
         # if the last "val_acc" is too big

@@ -19,7 +19,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Project: Deep Active Learning for Change detection on aerial images.')
 parser.add_argument('-name', help='run name - will output in this dir', default="Run-"+month+"-"+day)
 
-parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="50")
+parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="20") #50? 100?
 parser.add_argument('-model_batchsize', help='How big batch size for each model? (This is limited by the GPUs memory)', default="4")
 parser.add_argument('-model_backbone', help='Encoder', default="resnet34")
 
@@ -31,7 +31,9 @@ parser.add_argument('-AL_testsample_size', help='Have this many balanced sample 
 parser.add_argument('-AL_valsample_size', help='Have this many balanced sample images in the validation set (used for automatic thr choice and val errs)', default="200")
 parser.add_argument('-AL_iterationsample_size', help='Add this many images in each iteration', default="100")
 
-parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "Ensemble")', default="Random")
+parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "Ensemble", "MonteCarloBatchNormalization")', default="Random")
+
+parser.add_argument('-AL_AcquisitionFunction', help='For any method other than Random (choose from "Variance", "Entropy", "BALD")', default="Variance")
 
 parser.add_argument('-AL_Ensemble_numofmodels', help='If we chose Ensemble, how many models are there?', default="3")
 
@@ -71,11 +73,14 @@ def main(args):
     ITERATION_SAMPLE_SIZE = int(args.AL_iterationsample_size) #100
 
 
-    acquisition_function_mode = args.AL_method #"Ensemble" / "Random"
+    acquisition_function_mode = args.AL_method #"Ensemble" / "Random" / ""
+    acquisition_function = args.AL_AcquisitionFunction #"Variance" / "Entropy" / ""
     ModelEnsemble_N = int(args.AL_Ensemble_numofmodels)
 
     if acquisition_function_mode is not "Ensemble":
         ModelEnsemble_N = 1
+
+    MCBN_T = 16 # already quite high - make it a parameter and test with it...
 
     ENSEMBLE_tmp_how_many_from_random = 0 # Hybridization
 
@@ -85,22 +90,27 @@ def main(args):
     DEBUG_skip_evaluation = False
     threshold_fineness = 0.05 # default
 
+
     # New feature, failsafe for models in Ensembles ...
     FailSafeON = True # default
-    FailSafe__ValLossThr = 1.0 # default # maybe should be 1.5 ???
+    FailSafe__ValLossThr = 1.5 # default # maybe should be 1.5 ??? defo should be 1.5
+
 
     # LOCAL OVERRIDES:
     """
     acquisition_function_mode = "Ensemble"
     ModelEnsemble_N = 1
-    INITIAL_SAMPLE_SIZE = 600
+    INITIAL_SAMPLE_SIZE = 100
     N_ITERATIONS = 2
     epochs = 35
     REMOVE_SIZE = 75000
-    DEBUG_loadLastALModels = True
-    DEBUG_skip_evaluation = True # won't save the plots, but jumps directly to the AL acquisition functions
+    #DEBUG_loadLastALModels = True
+    #DEBUG_skip_evaluation = True # won't save the plots, but jumps directly to the AL acquisition functions
     
     threshold_fineness = 0.1 # 0.05 makes nicer plots
+
+    ###acquisition_function_mode = "Ensemble"
+    ###acquisition_function_mode = "MonteCarloBatchNormalization" # <<< Work in progress ...
     """
     ## Loop starts with a small train set (INITIAL_SAMPLE_SIZE)
     ## then adds some number every iteration (ITERATION_SAMPLE_SIZE)
@@ -248,7 +258,6 @@ def main(args):
         TMP__DontSave = False
         TMP__DontSave = True # < dont save
         Separate_Train_Eval__TrainAndSave = False # < this loads from the last interation (kept in case of mem errs)
-
         Separate_Train_Eval__TrainAndSave = not DEBUG_loadLastALModels # True in the command line means loading the file ...
 
         for i in range(ModelEnsemble_N):
@@ -257,21 +266,6 @@ def main(args):
             # These models have the same encoder part (same weights as loaded from the imagenet pretrained model)
             # ... however their decoder parts are initialized differently.
 
-        """
-        # Report on initial weights of a model:
-        model1 = ModelEnsemble[0]
-        model2 = ModelEnsemble[1]
-    
-        for l1, l2 in zip(model1.layers[2].layers, model2.layers[2].layers):
-            w1 = l1.get_weights()
-            w2 = l2.get_weights()
-            print(l1.name, np.array_equal(w1,w2))
-        """
-
-        #print("All layers (i hope that this gets inside the embedded model toooo...)")
-        #for layer in model.layers:
-        #    print(layer.name, layer.output_shape)
-        #model.layers[2].summary()
 
         if Separate_Train_Eval__TrainAndSave:
             # === Train!:
@@ -350,9 +344,68 @@ def main(args):
 
         print("Add new samples as per AL paradigm ... acquisition_function_mode=",acquisition_function_mode)
 
-        # this is not necessary for Random ...
-        if acquisition_function_mode == "Ensemble":
+        import keras.backend as K
+        from keras.utils import to_categorical
 
+        if acquisition_function_mode == "MonteCarloBatchNormalization":
+            print("Started with the MCBN preparation - first we save the current model (to later reset to it for each MCBN iteration)... into > AL_model_original_for_MCBN.h5")
+            ModelEnsemble[0].model.save(settings.large_file_folder+"AL_model_original_for_MCBN.h5")
+            #make N copies of the model - train each a bit away with its BN's
+
+            train_L, train_R, train_V = processed_val
+            if train_L.shape[3] > 3:
+                # 3 channels only - rgb
+                train_L = train_L[:, :, :, 1:4]
+                train_R = train_R[:, :, :, 1:4]
+            train_V = train_V.reshape(train_V.shape + (1,))
+            train_V = to_categorical(train_V)
+
+
+            batch_size = 16  # as it was when training - here default was 4 btw
+            train_data_indices = list(range(0, len(train_L)))
+
+            for MC_iteration in range(MCBN_T):
+                model_new_h = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
+                model_new_h.load(settings.large_file_folder+"AL_model_original_for_MCBN.h5")
+                model = model_new_h.model
+
+                selected_indices = random.sample(train_data_indices, batch_size * 4)
+
+                print("train_L[selected_indices] :: ", train_L[selected_indices].shape)  # 16, 256,256,3
+
+                train_sample = [train_L[selected_indices], train_R[selected_indices]]
+                train_sample = np.asarray(train_sample)
+                train_sample_labels = np.asarray(train_V[selected_indices])
+
+                print("MonteCarloBatchNormalization")
+                print("MCBN_T", MCBN_T)
+                print("batch_size", batch_size)
+                print("train_sample.shape", train_sample.shape)
+
+                # freeze everything besides BN layers
+                for i, layer in enumerate(model.layers[2].layers):
+                    name = layer.name
+                    if "bn" not in name:
+                        # freeeze layer which is not BN:
+                        layer.trainable = False
+                for i, layer in enumerate(model.layers):
+                    name = layer.name
+                    if "bn" not in name:
+                        # freeeze layer which is not BN:
+                        layer.trainable = False
+
+                print("Separately training an MCBN model", MC_iteration, " into > "+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
+                model.fit(x=[train_sample[0], train_sample[1]], y=train_sample_labels, batch_size=batch_size, epochs=25, verbose=2)
+
+                # ModelEnsemble.append(model_new_h)
+                model_new_h.save(settings.large_file_folder+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
+                del model_new_h
+
+        # this is not necessary for Random ...
+        if acquisition_function_mode == "Ensemble" or acquisition_function_mode == "MonteCarloBatchNormalization":
+
+
+            BALD_over_samples = []
             entropies_over_samples = []
             variances_over_samples = []
             overall_indices = np.asarray([]) # important to concat these correctly across batches
@@ -373,40 +426,119 @@ def main(args):
                 print("MegaBatch (",len(entropies_over_samples),"/",RemainingUnlabeledSet.N_of_data,") of size ", len(remaining_indices), " = indices from id", remaining_indices[0], "to id", remaining_indices[-1])
                 processed_remaining = dataPreprocesser.apply_on_a_set_nondestructively(remaining_data, no_labels=True)
 
-                # have the models in ensemble make predictions
-                # Function EnsemblePrediction() maybe even in batches?
+                # PS: these batches can be pretty small ... I wonder if I shouldn't accumulate them until the wanted [PER_BATCH]
+                # but how would I know how many would come in the next batch?
+
+                #if Accumulated + len(processed_remaining) < (PER_BATCH / 2):
+                #    Accumulator.append(processed_remaining)
+
                 PredictionsEnsemble = []
+                if acquisition_function_mode == "Ensemble":
+                    for nth, handler in enumerate(ModelEnsemble):
+                        model = handler.model
 
-                ##### potentially problematic -> too big for mem!
-                #### remaining_data, remaining_paths, remaining_indices = RemainingUnlabeledSet.get_all_data_as_arrays()
-                #### processed_remaining = dataPreprocesser.apply_on_a_set_nondestructively(remaining_data)
+                        test_L, test_R = processed_remaining
 
-                for nth, handler in enumerate(ModelEnsemble):
-                    model = handler.model
+                        if test_L.shape[3] > 3:
+                            # 3 channels only - rgb
+                            test_L = test_L[:,:,:,1:4]
+                            test_R = test_R[:,:,:,1:4]
+                        # label also reshape
+
+                        # only 5 images now!
+                        #subs = 100
+                        #test_L = test_L[0:subs]
+                        #test_R = test_R[0:subs]
+
+                        print("Predicting for", nth, "model in the ensemble - for disagreement calculations (on predicted size=",len(test_L),")")
+                        predicted = model.predict(x=[test_L, test_R], batch_size=4)
+                        predicted = predicted[:, :, :, 1] # 2 channels of softmax with 2 classes is useless - use just one
+
+                        PredictionsEnsemble.append(predicted)
+
+                # TODO: {idea} For MonteCarloBatchNormalization it might be better to make the models as copies of themselves to <ModelEnsemble> and train them before these batches come!
+
+                elif acquisition_function_mode == "MonteCarloBatchNormalization":
+                    print(" ==== Work In Progress ==== ")
+                    model_h = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
+                    model = model_h.model
+                    # model_h.load(settings.large_file_folder + "AL_model_original_for_MCBN.h5") # does this work? YES
+                    # What if we change the model exactly?
+                    for i, layer in enumerate(model.layers[2].layers):
+                        name = layer.name
+                        if "bn" not in name:
+                            # freeeze layer which is not BN:
+                            layer.trainable = False
+                    for i, layer in enumerate(model.layers):
+                        name = layer.name
+                        if "bn" not in name:
+                            # freeeze layer which is not BN:
+                            layer.trainable = False
+                    # now the models are the same ...
+                    model_h.load(settings.large_file_folder+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
+                    model = model_h.model
+                    f = K.function([model.layers[0].input, model.layers[1].input, K.learning_phase()],
+                                   [model.layers[-1].output]) # potentially wasting memory over time? this probably adds tf items
+
+                    ##############################################################################################
+                    ##############################################################################################
+                    ##############################################################################################
 
                     test_L, test_R = processed_remaining
 
                     if test_L.shape[3] > 3:
                         # 3 channels only - rgb
-                        test_L = test_L[:,:,:,1:4]
-                        test_R = test_R[:,:,:,1:4]
-                    # label also reshape
+                        test_L = test_L[:, :, :, 1:4]
+                        test_R = test_R[:, :, :, 1:4]
 
-                    # only 5 images now!
-                    #subs = 100
-                    #test_L = test_L[0:subs]
-                    #test_R = test_R[0:subs]
+                    batch_size = 16  # as it was when training
+                    train_data_indices = list(range(0, len(train_L)))
 
-                    print("Predicting for", nth, "model in the ensemble - for disagreement calculations (on predicted size=",len(test_L),")")
-                    predicted = model.predict(x=[test_L, test_R], batch_size=4)
-                    predicted = predicted[:, :, :, 1] # 2 channels of softmax with 2 classes is useless - use just one
+                    # For each sample?
+                    samples_N_BIGBatch = len(test_L)
+                    res = 256
+                    predictions_for_sample = np.zeros((MCBN_T, samples_N_BIGBatch) + (res, res,))  # < T, SamplesN, 256x256 >
+                    print("(init) predictions_for_sample.shape", predictions_for_sample.shape)
 
-                    PredictionsEnsemble.append(predicted)
+                    # FOR MINIBATCH IN BIGBATCH ...
+                    minibatch_size = 32
+                    times_minibatch = int(samples_N_BIGBatch/minibatch_size)
+                    minibatch_i = 0
 
-                from scipy.stats import entropy
+                    for MC_iteration in range(MCBN_T):
+                        minibatch_i = 0
+                        while minibatch_i < samples_N_BIGBatch:
+                            a = minibatch_i
+                            b = min(minibatch_i + minibatch_size, samples_N_BIGBatch)
+                            minibatch_i += minibatch_size
 
+                            sample = [test_L[a:b], test_R[a:b]]  # (32, 2,256,256,3)
+                            sample = np.asarray(sample)
+
+                            print("(mini)sample.shape", sample.shape)
+
+                            predicted = \
+                                f((np.asarray(sample[0], dtype=np.float32), np.asarray(sample[1], dtype=np.float32), 1))[0]
+
+                            predicted = predicted[:, :, :, 1]
+                            print("(mini)predicted.shape", sample.shape)
+
+                            predictions_for_sample[MC_iteration, a:b, :, :] = predicted
+                            print("predictions_for_sample.shape", predictions_for_sample.shape) # (5, 175, 256, 256)
+
+
+                    PredictionsEnsemble = predictions_for_sample
+                    ##############################################################################################
+                    # end if MCBN ################################################################################
+                    ##############################################################################################
+                    del model
+                    del model_h
+
+                # This is still inside this one batch!
                 PredictionsEnsemble = np.asarray(PredictionsEnsemble) # [5, 894, 256, 256]
                 PredictionsEnsemble_By_Images = np.swapaxes(PredictionsEnsemble, 0, 1) # [894, 5, 256, 256]
+
+                print("PredictionsEnsemble_By_Images.shape", PredictionsEnsemble_By_Images.shape) # PredictionsEnsemble_By_Images.shape (5, 1, 175, 256, 256)
 
                 resolution = len(PredictionsEnsemble[0][0]) # 256
 
@@ -415,50 +547,106 @@ def main(args):
                 for prediction_i in range(predictions_N):
                     predictions = PredictionsEnsemble_By_Images[prediction_i] # 5 x 256x256
 
-                    #start = timer()
+                    # No need
+                    # a_problematic_zone = 0.0001 # move 0-1 to 0.1 to 0.9
+                    # helper_offset = np.ones_like(predictions)
+                    # predictions = predictions * (1.0 - 2*a_problematic_zone) + helper_offset * (a_problematic_zone)
 
-                    entropy_image = None
+                    sum_bald = 0
                     sum_ent = 0
 
-                    # incorrect calculation of entropy btw
-                    ##entropy_image = np.apply_along_axis(arr=predictions, axis=0, func1d=entropy) # <<< The slow one ...
-                    ##sum_ent = np.sum(entropy_image.flatten())
+                    """
+                    
+                    #BALD calc 1.467359378002584s (0.0244559896333764min)
 
-                    #end = timer()
-                    #time = (end - start)
-                    #print("Entropy "+str(time)+"s ("+str(time/60.0)+"min)") ## Entropy cca 0.011 min
+                    def BALD_diff(pixel_predictions):
+                        # Bayesian Active Learning by Disagreement = BALD = https://arxiv.org/abs/1112.5745
+                        #T = len(pixel_predictions)
+                        #assert len(pixel_predictions.shape) == 1
+            
+                        accum = 0
+                        for val in pixel_predictions:
+                            #if val == 0.0:
+                            #    val += np.finfo(float).eps
+                            #elif val == 1.0:
+                            #    val -= np.finfo(float).eps
+            
+                            accum0 = - val * np.log(val)
+                            accum1 = - (1-val) * np.log(1-val)
+                            accum += accum0 + accum1
+            
+                        return accum
 
-                    #start = timer()
+                    def ent_img_sumDiv(pixel_predictions):
+                        return np.sum(pixel_predictions, axis=0) / len(pixel_predictions)
+                    def ent_img_log(pk):
+                        return - pk * np.log(pk)
 
+                    startTMP = timer()
+                    
+                    #Entropy calc 0.44229524800903164s (0.007371587466817194min)
+                    
+                    ent_img_pk0 = np.apply_along_axis(arr=predictions, axis=0, func1d=ent_img_sumDiv)
+                    ent_img_pk1 = np.ones_like(ent_img_pk0) - ent_img_pk0
+                    ent_img_ent0 = np.apply_along_axis(arr=ent_img_pk0, axis=0, func1d=ent_img_log)
+                    ent_img_ent1 = np.apply_along_axis(arr=ent_img_pk1, axis=0, func1d=ent_img_log)
+                    entropy_image = ent_img_ent0 + ent_img_ent1
+                    sum_ent = np.sum(entropy_image.flatten())
+
+                    endTMP = timer()
+                    timeTMP = (endTMP - startTMP)
+                    print("Entropy calc " + str(timeTMP ) + "s (" + str(timeTMP  / 60.0) + "min)")
+
+                    startTMP = timer()
+
+                    bald_diff_image = np.apply_along_axis(arr=predictions, axis=0, func1d=BALD_diff)
+            
+                    bald_image = -1 * ( entropy_image - bald_diff_image )
+                    sum_bald = np.sum(bald_image.flatten())
+
+                    endTMP = timer()
+                    timeTMP = (endTMP - startTMP)
+                    print("BALD calc " + str(timeTMP ) + "s (" + str(timeTMP / 60.0) + "min)")
+                    """
+
+                    #startTMP = timer()
+
+                    #Variance calc 0.00033402000553905964s (5.56700009231766e-06min)
                     variance_image = np.var(predictions, axis=0)
                     sum_var = np.sum(variance_image.flatten())
 
-                    #end = timer()
-                    #time = (end - start)
-                    #print("Variance "+str(time)+"s ("+str(time/60.0)+"min)") ## Variance cca 4.e-06
+                    #endTMP = timer()
+                    #timeTMP = (endTMP - startTMP)
+                    #print("Variance calc " + str(timeTMP ) + "s (" + str(timeTMP / 60.0) + "min)")
 
-                    ##print("Sum entropy over whole image:", sum_ent) # min of this
-                    #print("Sum variance over whole image:", sum_var) # max of this
 
                     do_viz = False
                     if do_viz:
+                        #if prediction_i < 32: # see first few !
                         fig = plt.figure(figsize=(10, 8))
-                        for i in range(ModelEnsemble_N):
+                        for i in range(len(PredictionsEnsemble)):
                             img = predictions[i]
-                            ax = fig.add_subplot(1, ModelEnsemble_N+2, i+1)
-                            plt.imshow(img, cmap='gray')
-                            ax.title.set_text('Model '+str(i))
+                            ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, i + 1)
+                            plt.imshow(img, cmap='gray', vmin=0.0, vmax=1.0)
+                            ax.title.set_text('Model ' + str(i))
 
-                        ax = fig.add_subplot(1, ModelEnsemble_N+2, ModelEnsemble_N+1)
-                        plt.imshow(entropy_image, cmap='gray')
-                        ax.title.set_text('Entropy Viz ('+str(sum_ent)+')')
+                        """
+                        ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, ModelEnsemble_N + 1)
+                        plt.imshow(entropy_image, cmap='gray', vmin=0.0, vmax=1.0)
+                        ax.title.set_text('Entropy (' + str(np.round(sum_ent, 3)) + ')')
 
-                        ax = fig.add_subplot(1, ModelEnsemble_N+2, ModelEnsemble_N+2)
-                        plt.imshow(variance_image, cmap='gray')
-                        ax.title.set_text('Variance Viz ('+str(sum_var)+')')
+                        ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, ModelEnsemble_N + 2)
+                        plt.imshow(bald_image, cmap='gray', vmin=0.0, vmax=1.0)
+                        ax.title.set_text('BALD (' + str(np.round(sum_bald, 3)) + ')')
+                        """
+
+                        ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, ModelEnsemble_N + 3)
+                        plt.imshow(variance_image, cmap='gray', vmin=0.0, vmax=1.0)
+                        ax.title.set_text('Variance (' + str(np.round(sum_var, 3)) + ')')
 
                         plt.show()
 
+                    BALD_over_samples.append(sum_bald)
                     entropies_over_samples.append(sum_ent)
                     variances_over_samples.append(sum_var)
 
@@ -490,12 +678,19 @@ def main(args):
 
             #print("random selected_indices", selected_indices)
 
-        if acquisition_function_mode == "Ensemble":
+        if acquisition_function_mode == "Ensemble" or acquisition_function_mode == "MonteCarloBatchNormalization":
             # indices 0 -> len(processed_remaining)
             # real corresponding indices are in remaining_indices
 
+            used_values = variances_over_samples
+            ### parser.add_argument('-AL_AcquisitionFunction', help='For any method other than Random (choose from "Variance", "Entropy", "BALD")', default="Variance")
+            if acquisition_function == "Entropy":
+                used_values = entropies_over_samples
+            elif acquisition_function == "BALD":
+                used_values = BALD_over_samples
+
             Select_K = int( ITERATION_SAMPLE_SIZE - ENSEMBLE_tmp_how_many_from_random )
-            semisorted_indices = np.argpartition(variances_over_samples, -Select_K) # < ints?
+            semisorted_indices = np.argpartition(used_values, -Select_K) # < ints?
             selected_indices_A = semisorted_indices[-Select_K:]
 
             if ENSEMBLE_tmp_how_many_from_random == 0:

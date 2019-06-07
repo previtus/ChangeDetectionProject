@@ -23,7 +23,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Project: Deep Active Learning for Change detection on aerial images.')
 parser.add_argument('-name', help='run name - will output in this dir', default="Run-"+month+"-"+day)
 
-parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="50")
+parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="50") #50? 100?
 parser.add_argument('-model_batchsize', help='How big batch size for each model? (This is limited by the GPUs memory)', default="4")
 parser.add_argument('-model_backbone', help='Encoder', default="resnet34")
 
@@ -35,7 +35,9 @@ parser.add_argument('-AL_testsample_size', help='Have this many balanced sample 
 parser.add_argument('-AL_valsample_size', help='Have this many balanced sample images in the validation set (used for automatic thr choice and val errs)', default="200")
 parser.add_argument('-AL_iterationsample_size', help='Add this many images in each iteration', default="100")
 
-parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "Ensemble")', default="Random")
+parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "Ensemble", "MonteCarloBatchNormalization")', default="Random")
+
+parser.add_argument('-AL_AcquisitionFunction', help='For any method other than Random (choose from "Variance", "Entropy", "BALD")', default="Variance")
 
 parser.add_argument('-AL_Ensemble_numofmodels', help='If we chose Ensemble, how many models are there?', default="3")
 
