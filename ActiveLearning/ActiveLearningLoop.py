@@ -42,23 +42,48 @@ parser.add_argument('-AL_MCBN_numofruns', help='If we chose Ensemble, how many m
 parser.add_argument('-DEBUG_remove_from_dataset', help='Debug to remove random samples without change from the original dataset...', default="40000")
 parser.add_argument('-DEBUG_loadLastALModels', help='Debug function - load last saved model weights instead of training ...', default="False")
 
+
+parser.add_argument('-resume', help='Resume from a folder (target the ones made in iterations) ...', default="")
+
+import random
+import numpy
+import pickle
+
+def save_random_states(path):
+    random_state = random.getstate()
+    nprandom_state = numpy.random.get_state()
+    with open(path, 'wb') as f:
+        pickle.dump([random_state,nprandom_state], f)
+
+def load_random_states(path):
+    f = open(path, "rb")
+    bin_data = f.read()
+    random_state, nprandom_state = pickle.loads(bin_data)
+    random.setstate(random_state)
+    numpy.random.set_state(nprandom_state)
+
+
 def main(args):
     args_txt = str(args)
     print(args_txt)
 
-    import random
-    import numpy
     #seed_num = 80 #50 #30 was done
     seed_num = int(args.seed)
 
+    args_name = args.name
+
     random.seed(seed_num) # samples
     numpy.random.seed(seed_num) # shuffles
+
     # keras and it's training is not influenced by this
 
     #import tensorflow as tf
     #config = tf.ConfigProto()
     #config.gpu_options.allow_growth=True
     #sess = tf.Session(config=config)
+
+    """ RESUME """
+    resume = args.resume
 
     """ TRAINING """
     epochs = int(args.model_epochs) # 50
@@ -95,7 +120,6 @@ def main(args):
     DEBUG_skip_loading_most_of_data_batches = False # Doesnt do what it should otherwise ...
     threshold_fineness = 0.05 # default
 
-
     # New feature, failsafe for models in Ensembles ...
     FailSafeON = True # default
     FailSafe__ValLossThr = 1.5 # default # maybe should be 1.5 ??? defo should be 1.5
@@ -124,6 +148,8 @@ def main(args):
     import matplotlib.pyplot as plt
     import numpy as np
 
+    if resume is not "":
+        assert resume[-1] == "/"
 
     #in_memory = False
     in_memory = True # when it all fits its much faster
@@ -207,13 +233,123 @@ def main(args):
     Ns_changed = []
     Ns_nochanged = []
 
+    IterationRange = list(range(N_ITERATIONS))
+
+    # LOAD:
+    if resume is not "":
+        print("Resuming run from: ", resume)
+
+        # load settings - and apply them where they cause changes!
+        statistics_resume = resume+"resume_statistics.npy"
+        all_settings_resume = resume+"resume_all_settings.npy"
+        all_sets_resume = resume+"resume_all_sets.npy"
+        randomstates_resume = resume+"resume_randomstates.pickle"
+
+        # statistics
+        statistics = np.load(statistics_resume)
+        pixel_statistics, tile_statistics = statistics
+        pixels_thresholds, xs_number_of_data, pixels_recalls, pixels_precisions, pixels_accuracies, pixels_f1s, Ns_changed, Ns_nochanged, pixels_AUCs = pixel_statistics
+        tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged = tile_statistics
+
+        # settings
+        all_settings = np.load(all_settings_resume)
+        active_learning_iteration, seed_num, args_name, resume, epochs, augmentation, model_backbone, N_ITERATIONS, \
+                    INITIAL_SAMPLE_SIZE, TEST_SAMPLE_SIZE, VAL_SAMPLE_SIZE, ITERATION_SAMPLE_SIZE, \
+                    acquisition_function_mode, acquisition_function, ModelEnsemble_N, MCBN_T, \
+                    ENSEMBLE_tmp_how_many_from_random, DEBUG_loadLastALModels, DEBUG_skip_evaluation, \
+                    DEBUG_skip_loading_most_of_data_batches, threshold_fineness, FailSafeON, FailSafe__ValLossThr = all_settings
+
+        # Types ...
+        active_learning_iteration = int(active_learning_iteration)
+        seed_num = int(seed_num)
+        epochs = int(epochs)
+        N_ITERATIONS = int(N_ITERATIONS)
+        INITIAL_SAMPLE_SIZE = int(INITIAL_SAMPLE_SIZE)
+        TEST_SAMPLE_SIZE = int(TEST_SAMPLE_SIZE)
+        VAL_SAMPLE_SIZE = int(VAL_SAMPLE_SIZE)
+        ITERATION_SAMPLE_SIZE = int(ITERATION_SAMPLE_SIZE)
+        ModelEnsemble_N = int(ModelEnsemble_N)
+        MCBN_T = int(MCBN_T)
+        ENSEMBLE_tmp_how_many_from_random = int(ENSEMBLE_tmp_how_many_from_random)
+
+        augmentation = (augmentation == "True")
+        DEBUG_loadLastALModels = (DEBUG_loadLastALModels == "True")
+        DEBUG_skip_evaluation = (DEBUG_skip_evaluation == "True")
+        DEBUG_skip_loading_most_of_data_batches = (DEBUG_skip_loading_most_of_data_batches == "True")
+        FailSafeON = (FailSafeON == "True")
+
+        threshold_fineness = float(threshold_fineness)
+        FailSafe__ValLossThr = float(FailSafe__ValLossThr)
+
+        done_iterations = active_learning_iteration
+        print("done_iterations", done_iterations, type(done_iterations))
+        print("FailSafeON", FailSafeON, type(FailSafeON))
+        IterationRange = list(range((done_iterations + 1), N_ITERATIONS))
+        print("Resuming from having finished iteration ", done_iterations, " remaining:", IterationRange)
+
+        # rebuild the sets ..............................................................................
+        set_indices = np.load(all_sets_resume)
+        TrainSetIndices, ValSetIndices, RemainingSetIndices, TestSetIndices = set_indices
+
+        WholeUnlabeledSet = get_unbalanced_dataset()
+
+        settings = WholeUnlabeledSet.settings
+        TestSet = LargeDatasetHandler_AL(settings, "inmemory")
+        ValSet = LargeDatasetHandler_AL(settings, "inmemory")
+        TrainSet = LargeDatasetHandler_AL(settings, "inmemory")
+        RemainingUnlabeledSet = LargeDatasetHandler_AL(settings, "ondemand")
+
+        trainset_packed_items = WholeUnlabeledSet.pop_items(TrainSetIndices)
+        TrainSet.add_items(trainset_packed_items)
+        testset_packed_items = WholeUnlabeledSet.pop_items(TestSetIndices)
+        TestSet.add_items(testset_packed_items)
+        valset_packed_items = WholeUnlabeledSet.pop_items(ValSetIndices)
+        ValSet.add_items(valset_packed_items)
+        remainingset_packed_items = WholeUnlabeledSet.pop_items(RemainingSetIndices)
+        RemainingUnlabeledSet.add_items(remainingset_packed_items)
+
+        load_random_states(randomstates_resume)
+        print("sample random -->", numpy.random.rand(1, 6))
+
+        print("====================================== Reports:")
+
+        print("RemainingUnlabeledSet set:")
+        RemainingUnlabeledSet.report()
+
+        print("Train set:")
+        TrainSet.report()
+        N_change_test, N_nochange_test = TrainSet.report_balance_of_class_labels()
+        print("are we balanced in the train set?? Change:NoChange", N_change_test, N_nochange_test)
+
+        print("Test set:")
+        TestSet.report()
+        N_change_test, N_nochange_test = TestSet.report_balance_of_class_labels()
+        print("are we balanced in the test set?? Change:NoChange", N_change_test, N_nochange_test)
+
+        print("Validation set:")
+        ValSet.report()
+        N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
+        print("are we balanced in the val set?? Change:NoChange", N_change_val, N_nochange_val)
+
+        print("======================================")
+
+        test_data, test_paths, _ = TestSet.get_all_data_as_arrays()
+        val_data, val_paths, _ = ValSet.get_all_data_as_arrays()
+
+        dataPreprocesser = DataPreprocesser_dataIndependent(settings, number_of_channels=4)
+        trainTestHandler = TrainTestHandler(settings)
+        evaluator = Evaluator(settings)
+
+        print("----- loaded")
+
+
     #for active_learning_iteration in range(30): # 30*500 => 15k images
-    for active_learning_iteration in range(N_ITERATIONS):
+    for active_learning_iteration in IterationRange:
         xs_number_of_data.append(TrainSet.get_number_of_samples())
         # survived to 0-5 = 6*500 = 3000 images (I think that then the RAM was filled ...)
 
         # Save args log:
-        DEBUG_SAVE_ALL_THR_FOLDER = "["+args.name+"]_iteration_"+str(active_learning_iteration).zfill(2)+"_debugThrOverview/"
+        DEBUG_SAVE_ALL_THR_FOLDER = "["+args_name+"]_iteration_"+str(active_learning_iteration).zfill(2)+"_debugThrOverview/"
         DEBUG_SAVE_ALL_THR_PLOTS = DEBUG_SAVE_ALL_THR_FOLDER+"iteration_"+str(active_learning_iteration).zfill(2)
         #DEBUG_SAVE_ALL_THR_PLOTS = None
         if not os.path.exists(DEBUG_SAVE_ALL_THR_FOLDER):
@@ -770,7 +906,58 @@ def main(args):
         tile_statistics = tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged
         statistics = pixel_statistics, tile_statistics
         statistics = np.asarray(statistics)
-        np.save("["+args.name+"]_al_statistics.npy", statistics)
+        #np.save("["+args_name+"]_al_statistics.npy", statistics)
+        np.save(DEBUG_SAVE_ALL_THR_FOLDER+"resume_statistics.npy", statistics)
+
+
+        # SAVE THIS ITERATION
+        print("Saving this iteration for resume into folder: ", DEBUG_SAVE_ALL_THR_FOLDER)
+        # Save all settings + iteration N
+        all_settings = []
+        all_settings = active_learning_iteration, seed_num, args_name, resume, epochs, augmentation, model_backbone, N_ITERATIONS, \
+                       INITIAL_SAMPLE_SIZE, TEST_SAMPLE_SIZE, VAL_SAMPLE_SIZE, ITERATION_SAMPLE_SIZE, \
+                       acquisition_function_mode, acquisition_function, ModelEnsemble_N, MCBN_T, \
+                       ENSEMBLE_tmp_how_many_from_random,DEBUG_loadLastALModels,DEBUG_skip_evaluation, \
+                       DEBUG_skip_loading_most_of_data_batches, threshold_fineness, FailSafeON, FailSafe__ValLossThr
+        all_settings = np.asarray(all_settings)
+        np.save(DEBUG_SAVE_ALL_THR_FOLDER+"resume_all_settings.npy", all_settings)
+
+        # Save Train + Val + Remaining sets
+        TrainSetIndices = TrainSet.get_all_indices_for_saving()
+        ValSetIndices = ValSet.get_all_indices_for_saving()
+        TestSetIndices = TestSet.get_all_indices_for_saving()
+        RemainingSetIndices = RemainingUnlabeledSet.get_all_indices_for_saving()
+        set_indices = TrainSetIndices, ValSetIndices, RemainingSetIndices, TestSetIndices
+        set_indices = np.asarray(set_indices)
+        np.save(DEBUG_SAVE_ALL_THR_FOLDER+"resume_all_sets.npy", set_indices)
+
+        # random states (not all that important as we expect stochasticity in the models anyway...)
+        save_random_states(DEBUG_SAVE_ALL_THR_FOLDER+"resume_randomstates.pickle")
+        print("sample random -->", numpy.random.rand(1, 6))
+
+        print("----- saved")
+
+        print("=====<this was saved>================================= Reports:")
+
+        print("RemainingUnlabeledSet set:")
+        RemainingUnlabeledSet.report()
+
+        print("Train set:")
+        TrainSet.report()
+        N_change_test, N_nochange_test = TrainSet.report_balance_of_class_labels()
+        print("are we balanced in the train set?? Change:NoChange", N_change_test, N_nochange_test)
+
+        print("Test set:")
+        TestSet.report()
+        N_change_test, N_nochange_test = TestSet.report_balance_of_class_labels()
+        print("are we balanced in the test set?? Change:NoChange", N_change_test, N_nochange_test)
+
+        print("Validation set:")
+        ValSet.report()
+        N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
+        print("are we balanced in the val set?? Change:NoChange", N_change_val, N_nochange_val)
+
+        print("=====<this was saved>=================================")
 
     #- AL outline, have two sets - TrainSet and UnlabeledSet and move data in between them... (always everything we have?)
     #2b.) Acquisition function to select subset of the RemainingUnlabeledSet -> move it to the TrainSet
@@ -779,7 +966,7 @@ def main(args):
     tile_statistics = tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged
     statistics = pixel_statistics, tile_statistics
     statistics = np.asarray(statistics)
-    np.save("["+args.name+"]_al_statistics.npy", statistics)
+    np.save("["+args_name+"]_al_statistics.npy", statistics)
     #####statistics = np.load("al_statistics.npy")
 
     pixel_statistics, tile_statistics = statistics
@@ -813,7 +1000,7 @@ def main(args):
     plt.legend()
     plt.ylim(0.0, 1.0)
 
-    plt.savefig("["+args.name+"]_dbg_last_al_big_plot_pixelsScores.png")
+    plt.savefig("["+args_name+"]_dbg_last_al_big_plot_pixelsScores.png")
     plt.close()
 
     # TILES
@@ -841,7 +1028,7 @@ def main(args):
     plt.legend()
     plt.ylim(0.0, 1.0)
 
-    plt.savefig("["+args.name+"]_dbg_last_al_big_plot_tilesScores.png")
+    plt.savefig("["+args_name+"]_dbg_last_al_big_plot_tilesScores.png")
     plt.close()
 
 
@@ -857,7 +1044,7 @@ def main(args):
     plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
     plt.legend((p1[0], p2[0]), ('Change', 'NoChange'))
 
-    plt.savefig("["+args.name+"]_dbg_last_al_balance_plot.png")
+    plt.savefig("["+args_name+"]_dbg_last_al_balance_plot.png")
     plt.close()
 
     print("Ensemble tested on completely unbalanced!")

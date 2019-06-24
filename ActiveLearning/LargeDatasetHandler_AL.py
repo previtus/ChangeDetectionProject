@@ -605,6 +605,10 @@ class LargeDatasetHandler_AL(object):
     #                   dataset, do load it ... on the opposite case, deleted the actual data)
     # - remove_by_indice()
 
+    def get_all_indices_for_saving(self):
+        # as a part of saving a loading,
+        # if we get all the indices from a set, then we can pop() from entire LargeDatasetHandler without problems
+        return self.indices
 
     def pop_items(self, indices_to_pop):
         # return as dictionaries (which can be added to a new object)
