@@ -570,6 +570,7 @@ class Evaluator(object):
             number_of_ones = np.count_nonzero(mask.flatten()) # << loading takes care of this 0 vs non-zero
             array_of_number_of_change_pixels.append(number_of_ones)
 
+        # TODO: CONSIDER UNIQUE NAME AND ALSO DELETING? !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING")
         array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING")
 
@@ -667,7 +668,7 @@ class Evaluator(object):
 
     # ================= Unified test func call:
 
-    def unified_test_report(self, models, testing_set, validation_set, postprocessor, name, threshold_fineness = 0.05, optionally_save_missclassified = False, optional_manual_exclusions=[], optional_additional_predAndGts = []):
+    def unified_test_report(self, models, testing_set, validation_set, postprocessor, name, threshold_fineness = 0.05, optionally_save_missclassified = False, optional_manual_exclusions=[], optional_additional_predAndGts = [], ForceShow=False):
         if len(models) > 1:
             print("Testing model ensemble:", len(models), "*" ,models[0],"on test set (size", len(testing_set[0]),")")
         else:
@@ -760,15 +761,20 @@ class Evaluator(object):
             officially_we_have_N = len(predicted)
 
         if len(optional_additional_predAndGts) > 0:
-            additional_predicted, additional_gts = optional_additional_predAndGts
+            ### HAX, get out of here
+            ## in predicted, test_V we have what we want
+            #additional_predicted, additional_gts = optional_additional_predAndGts
 
             print("predicted.shape", predicted.shape)
-            print("additional_predicted.shape", additional_predicted.shape)
+            #print("additional_predicted.shape", additional_predicted.shape)
 
-            predicted = np.append(predicted, additional_predicted, 0)
-            test_V = np.append(test_V, additional_gts, 0)
+            #predicted = np.append(predicted, additional_predicted, 0)
+            #test_V = np.append(test_V, additional_gts, 0)
             print("after appending predicted.shape", predicted.shape)
-            print("after appending (gts) test_V.shape", test_V.shape)
+            #print("after appending (gts) test_V.shape", test_V.shape)
+            
+            ToReturn_predicted = predicted
+            ToReturn_gts = test_V
 
         # Unified reporting:
         # - 1.) evaluation per pixel
@@ -781,6 +787,9 @@ class Evaluator(object):
 
         show = False
         save = True
+
+        #if ForceShow: # this won't work on distant eval. obv.
+        #    show = True
 
         print("::: PER PIXEL EVALUATION :::")
         # range should include the end points (0.0 and 1.0)
@@ -918,6 +927,8 @@ class Evaluator(object):
 
 
         # save missclassifications (optionally)
+        if ForceShow: # this won't work on distant eval. obv.
+            show = True
 
         if optionally_save_missclassified:
             threshold = tiles_best_thr
@@ -989,6 +1000,12 @@ class Evaluator(object):
         tiles_stats = tiles_best_thr, tiles_selected_recall, tiles_selected_precision, tiles_selected_accuracy, tiles_selected_f1
         mask_stats = pixels_best_thr, pixels_selected_recall, pixels_selected_precision, pixels_selected_accuracy, pixels_selected_f1, pixels_auc
         statistics = mask_stats, tiles_stats
+
+        if len(optional_additional_predAndGts) > 0:
+            ### HAX, get out of here with more stuff!
+            return statistics, pixels_best_thr, tiles_best_thr, ToReturn_predicted, ToReturn_gts
+
+
         return statistics
 
 

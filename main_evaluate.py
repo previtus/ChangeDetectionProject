@@ -43,6 +43,15 @@ star = '*resnet50-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_*'
 model_used = "resnet50"
 
 
+# NEW ONES - looking at ResNet34, same stats as the rest (baseline for AL methods)
+# weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet34-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_0z5]
+
+INPUT_FILE_EXCLUSIONS = "" # < to compare with AL, no exclusions
+star = '*resnet34-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_*'
+model_used = "resnet34"
+# !!!!!!!!!! This used augmentation - all AL models will too then.
+
+
 parser.add_argument('-model_backend', help='Model used in the encoder part of the U-Net structures model', default=model_used)
 parser.add_argument('-models_path_star', help='Path to models with reg exp selection', default=path+star)
 
@@ -149,6 +158,9 @@ def main(args):
             os.makedirs("evaluation_plots/")
         if not os.path.exists(model.model.save_plot_path):
             os.makedirs(model.model.save_plot_path)
+        file = open("evaluation_plots/inprogress.txt", "w")
+        file.write("Started \n")
+        file.close()
 
         ###############################################################################################################
         ###############################################################################################################
@@ -203,6 +215,18 @@ def main(args):
                 hdf5_file.close()
                 return arr
             """
+            def save_images_to_h5_DEFAULT_DATA_FORMAT(lefts, rights, labels, hdf5_path):
+                SUBSET = len(lefts)
+
+                hdf5_file = h5py.File(hdf5_path, mode='w')
+                hdf5_file.create_dataset("lefts", data=lefts)
+                hdf5_file.create_dataset("rights", data=rights)
+                hdf5_file.create_dataset("labels", data=labels)
+                hdf5_file.close()
+
+                print("Saved", SUBSET, "images successfully to:", hdf5_path)
+
+                return hdf5_path
 
             def save_images_to_h5(lefts, rights, labels, hdf5_path):
                 SIZE = lefts[0].shape
@@ -230,8 +254,8 @@ def main(args):
             #path_additional_set = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/datasets/INBALANCED_ADDITIONAL_LEFTS_DATASET_FOR_TESTS50"
             path_additional_set = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/datasets/INBALANCED_ADDITIONAL_LEFTS_DATASET_FOR_TESTS800"
 
-            PER_BATCH = 800
-            batches_to_load = 1 # does mem survive ~ 3200 imgs ??
+            PER_BATCH = 1000 # that's really small and thus slow ...
+            batches_to_load = 9 # goes from 0 to 8
 
             # SAVE ONCE, THEN REUSE THOSE BATCHES
             """
@@ -241,7 +265,7 @@ def main(args):
             for batch in WholeDataset.generator_for_all_images(PER_BATCH, mode='datalabels', custom_indices_to_sample_from = selected_indices):
                 selected_indices, [additional_L, additional_R], additional_V = batch
 
-                save_images_to_h5(additional_L, additional_R, additional_V, path_additional_set+"_"+str(batch_i)+".h5")
+                save_images_to_h5_DEFAULT_DATA_FORMAT(additional_L, additional_R, additional_V, path_additional_set+"_"+str(batch_i)+"_"+str(PER_BATCH)+".h5")
                 batch_i += 1
 
                 del additional_L
@@ -258,7 +282,7 @@ def main(args):
             for i in range(batches_to_load):
                 print("loading batch ",i)
 
-                additional_L, additional_R, additional_V = load_images_from_h5(path_additional_set+"_"+str(i)+".h5")
+                additional_L, additional_R, additional_V = load_images_from_h5(path_additional_set+"_"+str(i)+"_"+str(PER_BATCH)+".h5")
                 additional_set = additional_L, additional_R, additional_V
                 # goes up to 18G~21G/31G
                 additional_set_processed = dataset.dataPreprocesser.apply_on_a_set_nondestructively(additional_set, be_destructive=True)
@@ -283,11 +307,18 @@ def main(args):
                 additional_predicted.extend(additional_predicted_batch)
                 additional_gts.extend(additional_gts_batch)
 
+                print("Successfully predicted", len(additional_predicted), "so far!")
+                file = open("evaluation_plots/inprogress.txt", "a")
+                file.write("Successfully predicted"+str(len(additional_predicted))+"so far!\n")
+                file.close()
+
                 del additional_predicted_batch
                 del additional_gts_batch
                 del additional_set_processed
                 del additional_set
-
+                
+                import keras
+                keras.backend.clear_session() # CLEAR GPU MEM
 
                 ####
                 # RESET the model... something has changed in it even if we only predict ... (model's stochasticity ....)
@@ -323,6 +354,36 @@ def main(args):
                                                     name=SAVE_ALL_PLOTS, optionally_save_missclassified=True,
                                                    optional_manual_exclusions = exclusions_by_idxs[model_idx],
                                                    optional_additional_predAndGts = optional_additional_predAndGts)
+        if SimulateUnbalancedDataset:
+            # HAX NOW IF WE GET HERE ...
+            statistics, pixels_best_thr, tiles_best_thr, ToReturn_predicted, ToReturn_gts = statistics
+            print("the threshold has been selected on the VAL data as:", pixels_best_thr, tiles_best_thr)
+            print("now we have")
+            print("ToReturn_predicted=",ToReturn_predicted.shape)
+            print("additional_predicted=",additional_predicted.shape)
+            print("ToReturn_gts=",ToReturn_gts.shape)
+            print("additional_gts=",additional_gts.shape)
+            predicted_total = np.append(additional_predicted, ToReturn_predicted, 0)
+            gts_total = np.append(additional_gts, ToReturn_gts, 0)
+
+            path_large_files_backup_sol = "/scratch/ruzicka/python_projects_large/ChangeDetectionProject_files/main_eval_mem_issues/"
+            import os
+            if not os.path.exists(path_large_files_backup_sol):
+                os.makedirs(path_large_files_backup_sol)
+            if not os.path.exists(path_large_files_backup_sol+folder_name+"/"):
+                os.makedirs(path_large_files_backup_sol+folder_name+"/")
+            np.save(path_large_files_backup_sol+folder_name+"/"+"BatchI-"+str(model_idx)+"_predicted_total.npy", predicted_total)
+            np.save(path_large_files_backup_sol+folder_name+"/"+"BatchI-"+str(model_idx)+"_gts_total.npy", gts_total)
+            np.save(path_large_files_backup_sol+folder_name+"/"+"BatchI-"+str(model_idx)+"_statistics_total.npy", np.asarray(statistics))
+            print("predicted_total=",predicted_total.shape)
+            print("gts_total=",gts_total.shape)
+
+            del additional_predicted
+            del additional_gts
+            del ToReturn_predicted
+            del ToReturn_gts
+            del predicted_total
+            del gts_total
 
         # model.model.test(evaluator,show=show,save=save)
 
