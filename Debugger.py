@@ -387,6 +387,8 @@ class Debugger(object):
             plt.savefig(name+".png")
             #plt.savefig(name+".pdf")
 
+        plt.close()
+
 
     # File helpers
 

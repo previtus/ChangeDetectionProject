@@ -18,24 +18,26 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Project: Deep Active Learning for Change detection on aerial images.')
 parser.add_argument('-name', help='run name - will output in this dir', default="Run-"+month+"-"+day)
+parser.add_argument('-seed', help='random seed (for multiple runs)', default="30")
 
-parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="20") #50? 100?
-parser.add_argument('-model_batchsize', help='How big batch size for each model? (This is limited by the GPUs memory)', default="4")
+parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="100") #50? 100?
+parser.add_argument('-model_batchsize', help='How big batch size for each model? (This is limited by the GPUs memory)', default="16")
 parser.add_argument('-model_backbone', help='Encoder', default="resnet34")
 
 parser.add_argument('-train_augmentation', help='Turn on augmentation? (one new image for each image in the train set - effectively doubling the dataset size)', default="False")
 
 parser.add_argument('-AL_iterations', help='Number of iterations in the Active Learning loop', default="10")
-parser.add_argument('-AL_initialsample_size', help='Start with this many sampled images in the training set', default="100")
+parser.add_argument('-AL_initialsample_size', help='Start with this many sampled images in the training set', default="50")
 parser.add_argument('-AL_testsample_size', help='Have this many balanced sample images in the testing set (used for plots)', default="200")
 parser.add_argument('-AL_valsample_size', help='Have this many balanced sample images in the validation set (used for automatic thr choice and val errs)', default="200")
 parser.add_argument('-AL_iterationsample_size', help='Add this many images in each iteration', default="100")
 
-parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "Ensemble", "MonteCarloBatchNormalization")', default="Random")
+parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "Ensemble", "MonteCarloBatchNormalization")', default="Ensemble")
 
 parser.add_argument('-AL_AcquisitionFunction', help='For any method other than Random (choose from "Variance", "Entropy", "BALD")', default="Variance")
 
 parser.add_argument('-AL_Ensemble_numofmodels', help='If we chose Ensemble, how many models are there?', default="3")
+parser.add_argument('-AL_MCBN_numofruns', help='If we chose Ensemble, how many models are there?', default="4")
 
 parser.add_argument('-DEBUG_remove_from_dataset', help='Debug to remove random samples without change from the original dataset...', default="40000")
 parser.add_argument('-DEBUG_loadLastALModels', help='Debug function - load last saved model weights instead of training ...', default="False")
@@ -46,7 +48,9 @@ def main(args):
 
     import random
     import numpy
-    seed_num = 30
+    #seed_num = 80 #50 #30 was done
+    seed_num = int(args.seed)
+
     random.seed(seed_num) # samples
     numpy.random.seed(seed_num) # shuffles
     # keras and it's training is not influenced by this
@@ -60,7 +64,7 @@ def main(args):
     epochs = int(args.model_epochs) # 50
     batch_size = int(args.model_batchsize) # 4
     augmentation = (args.train_augmentation == 'True') #False
-    model_backbone = "resnet34"
+    model_backbone = args.model_backbone
 
 
     """ ACTIVE LEARNING """
@@ -80,7 +84,7 @@ def main(args):
     if acquisition_function_mode is not "Ensemble":
         ModelEnsemble_N = 1
 
-    MCBN_T = 16 # already quite high - make it a parameter and test with it...
+    MCBN_T = int(args.AL_MCBN_numofruns)
 
     ENSEMBLE_tmp_how_many_from_random = 0 # Hybridization
 
@@ -88,6 +92,7 @@ def main(args):
     REMOVE_SIZE = int(args.DEBUG_remove_from_dataset)
     DEBUG_loadLastALModels = (args.DEBUG_loadLastALModels == 'True')
     DEBUG_skip_evaluation = False
+    DEBUG_skip_loading_most_of_data_batches = False # Doesnt do what it should otherwise ...
     threshold_fineness = 0.05 # default
 
 
@@ -273,8 +278,10 @@ def main(args):
             for i in range(ModelEnsemble_N):
                 print("Training model",i,"in the ensemble (out of",ModelEnsemble_N,"):")
 
-                AllowedFailsafeRetrains = 4 # Not to actually get stuck
+                AllowedFailsafeRetrains = 10 # Not to actually get stuck
                 failed_training_flag = True # When looking at results on VAL set (don't know what would happen on TEST).
+
+
                 while failed_training_flag:
 
                     history, broken_flag, failed_training_flag = trainTestHandler.train(ModelEnsemble[i].model, processed_train, processed_val, epochs, batch_size,
@@ -293,6 +300,8 @@ def main(args):
                         print("Detected model training fail safe - revert the model - then retrain!")
                         modelHandler_restart = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
                         ModelEnsemble[i] = modelHandler_restart
+                    else:
+                        failed_training_flag = False
 
                 if broken_flag:
                     print("Got as far as until AL iteration:", active_learning_iteration, " ... now breaking")
@@ -360,8 +369,8 @@ def main(args):
             train_V = train_V.reshape(train_V.shape + (1,))
             train_V = to_categorical(train_V)
 
+            batch_size_mctrain = batch_size  # as it was when training - default was 4, will that be ok?
 
-            batch_size = 16  # as it was when training - here default was 4 btw
             train_data_indices = list(range(0, len(train_L)))
 
             for MC_iteration in range(MCBN_T):
@@ -369,7 +378,7 @@ def main(args):
                 model_new_h.load(settings.large_file_folder+"AL_model_original_for_MCBN.h5")
                 model = model_new_h.model
 
-                selected_indices = random.sample(train_data_indices, batch_size * 4)
+                selected_indices = random.sample(train_data_indices, batch_size_mctrain * 4)
 
                 print("train_L[selected_indices] :: ", train_L[selected_indices].shape)  # 16, 256,256,3
 
@@ -379,7 +388,7 @@ def main(args):
 
                 print("MonteCarloBatchNormalization")
                 print("MCBN_T", MCBN_T)
-                print("batch_size", batch_size)
+                print("batch_size_mctrain", batch_size_mctrain)
                 print("train_sample.shape", train_sample.shape)
 
                 # freeze everything besides BN layers
@@ -395,7 +404,7 @@ def main(args):
                         layer.trainable = False
 
                 print("Separately training an MCBN model", MC_iteration, " into > "+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
-                model.fit(x=[train_sample[0], train_sample[1]], y=train_sample_labels, batch_size=batch_size, epochs=25, verbose=2)
+                model.fit(x=[train_sample[0], train_sample[1]], y=train_sample_labels, batch_size=batch_size_mctrain, epochs=25, verbose=2)
 
                 # ModelEnsemble.append(model_new_h)
                 model_new_h.save(settings.large_file_folder+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
@@ -460,25 +469,6 @@ def main(args):
 
                 elif acquisition_function_mode == "MonteCarloBatchNormalization":
                     print(" ==== Work In Progress ==== ")
-                    model_h = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
-                    model = model_h.model
-                    # model_h.load(settings.large_file_folder + "AL_model_original_for_MCBN.h5") # does this work? YES
-                    # What if we change the model exactly?
-                    for i, layer in enumerate(model.layers[2].layers):
-                        name = layer.name
-                        if "bn" not in name:
-                            # freeeze layer which is not BN:
-                            layer.trainable = False
-                    for i, layer in enumerate(model.layers):
-                        name = layer.name
-                        if "bn" not in name:
-                            # freeeze layer which is not BN:
-                            layer.trainable = False
-                    # now the models are the same ...
-                    model_h.load(settings.large_file_folder+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
-                    model = model_h.model
-                    f = K.function([model.layers[0].input, model.layers[1].input, K.learning_phase()],
-                                   [model.layers[-1].output]) # potentially wasting memory over time? this probably adds tf items
 
                     ##############################################################################################
                     ##############################################################################################
@@ -491,8 +481,7 @@ def main(args):
                         test_L = test_L[:, :, :, 1:4]
                         test_R = test_R[:, :, :, 1:4]
 
-                    batch_size = 16  # as it was when training
-                    train_data_indices = list(range(0, len(train_L)))
+                    batch_size_mctest = 4  # as it was when training
 
                     # For each sample?
                     samples_N_BIGBatch = len(test_L)
@@ -501,11 +490,37 @@ def main(args):
                     print("(init) predictions_for_sample.shape", predictions_for_sample.shape)
 
                     # FOR MINIBATCH IN BIGBATCH ...
-                    minibatch_size = 32
+                    minibatch_size = batch_size_mctest
                     times_minibatch = int(samples_N_BIGBatch/minibatch_size)
                     minibatch_i = 0
 
                     for MC_iteration in range(MCBN_T):
+                        # ! IN EACH BATCH WE LOAD
+                        # ! BUT AFTER WE ALSO CLEAN
+
+                        model_h = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
+                        model = model_h.model
+                        # model_h.load(settings.large_file_folder + "AL_model_original_for_MCBN.h5") # does this work? YES
+                        # What if we change the model exactly?
+                        for i, layer in enumerate(model.layers[2].layers):
+                            name = layer.name
+                            if "bn" not in name:
+                                # freeeze layer which is not BN:
+                                layer.trainable = False
+                        for i, layer in enumerate(model.layers):
+                            name = layer.name
+                            if "bn" not in name:
+                                # freeeze layer which is not BN:
+                                layer.trainable = False
+                        # now the models are the same ...
+                        model_h.load(
+                            settings.large_file_folder + "AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(
+                                2) + ".h5")
+                        model = model_h.model
+                        f = K.function([model.layers[0].input, model.layers[1].input, K.learning_phase()],
+                                       [model.layers[
+                                            -1].output])  # potentially wasting memory over time? this probably adds tf items
+
                         minibatch_i = 0
                         while minibatch_i < samples_N_BIGBatch:
                             a = minibatch_i
@@ -526,6 +541,11 @@ def main(args):
                             predictions_for_sample[MC_iteration, a:b, :, :] = predicted
                             print("predictions_for_sample.shape", predictions_for_sample.shape) # (5, 175, 256, 256)
 
+                            del sample
+                            del predicted
+
+                        keras.backend.clear_session()  # ??? will this not ruin it all?
+                        # maybe ok, i'll load the model each time anyway, no?
 
                     PredictionsEnsemble = predictions_for_sample
                     ##############################################################################################
@@ -533,6 +553,9 @@ def main(args):
                     ##############################################################################################
                     del model
                     del model_h
+                    del f
+                    del predictions_for_sample
+
 
                 # This is still inside this one batch!
                 PredictionsEnsemble = np.asarray(PredictionsEnsemble) # [5, 894, 256, 256]
@@ -555,59 +578,59 @@ def main(args):
                     sum_bald = 0
                     sum_ent = 0
 
-                    """
+                    if acquisition_function is not "Variance": # "Variance", "Entropy", "BALD")
                     
-                    #BALD calc 1.467359378002584s (0.0244559896333764min)
+                        #BALD calc 1.467359378002584s (0.0244559896333764min)
 
-                    def BALD_diff(pixel_predictions):
-                        # Bayesian Active Learning by Disagreement = BALD = https://arxiv.org/abs/1112.5745
-                        #T = len(pixel_predictions)
-                        #assert len(pixel_predictions.shape) == 1
-            
-                        accum = 0
-                        for val in pixel_predictions:
-                            #if val == 0.0:
-                            #    val += np.finfo(float).eps
-                            #elif val == 1.0:
-                            #    val -= np.finfo(float).eps
-            
-                            accum0 = - val * np.log(val)
-                            accum1 = - (1-val) * np.log(1-val)
-                            accum += accum0 + accum1
-            
-                        return accum
+                        def BALD_diff(pixel_predictions):
+                            # Bayesian Active Learning by Disagreement = BALD = https://arxiv.org/abs/1112.5745
+                            #T = len(pixel_predictions)
+                            #assert len(pixel_predictions.shape) == 1
 
-                    def ent_img_sumDiv(pixel_predictions):
-                        return np.sum(pixel_predictions, axis=0) / len(pixel_predictions)
-                    def ent_img_log(pk):
-                        return - pk * np.log(pk)
+                            accum = 0
+                            for val in pixel_predictions:
+                                #if val == 0.0:
+                                #    val += np.finfo(float).eps
+                                #elif val == 1.0:
+                                #    val -= np.finfo(float).eps
 
-                    startTMP = timer()
-                    
-                    #Entropy calc 0.44229524800903164s (0.007371587466817194min)
-                    
-                    ent_img_pk0 = np.apply_along_axis(arr=predictions, axis=0, func1d=ent_img_sumDiv)
-                    ent_img_pk1 = np.ones_like(ent_img_pk0) - ent_img_pk0
-                    ent_img_ent0 = np.apply_along_axis(arr=ent_img_pk0, axis=0, func1d=ent_img_log)
-                    ent_img_ent1 = np.apply_along_axis(arr=ent_img_pk1, axis=0, func1d=ent_img_log)
-                    entropy_image = ent_img_ent0 + ent_img_ent1
-                    sum_ent = np.sum(entropy_image.flatten())
+                                accum0 = - val * np.log(val)
+                                accum1 = - (1-val) * np.log(1-val)
+                                accum += accum0 + accum1
 
-                    endTMP = timer()
-                    timeTMP = (endTMP - startTMP)
-                    print("Entropy calc " + str(timeTMP ) + "s (" + str(timeTMP  / 60.0) + "min)")
+                            return accum
 
-                    startTMP = timer()
+                        def ent_img_sumDiv(pixel_predictions):
+                            return np.sum(pixel_predictions, axis=0) / len(pixel_predictions)
+                        def ent_img_log(pk):
+                            return - pk * np.log(pk)
 
-                    bald_diff_image = np.apply_along_axis(arr=predictions, axis=0, func1d=BALD_diff)
-            
-                    bald_image = -1 * ( entropy_image - bald_diff_image )
-                    sum_bald = np.sum(bald_image.flatten())
+                        startTMP = timer()
 
-                    endTMP = timer()
-                    timeTMP = (endTMP - startTMP)
-                    print("BALD calc " + str(timeTMP ) + "s (" + str(timeTMP / 60.0) + "min)")
-                    """
+                        #Entropy calc 0.44229524800903164s (0.007371587466817194min)
+
+                        ent_img_pk0 = np.apply_along_axis(arr=predictions, axis=0, func1d=ent_img_sumDiv)
+                        ent_img_pk1 = np.ones_like(ent_img_pk0) - ent_img_pk0
+                        ent_img_ent0 = np.apply_along_axis(arr=ent_img_pk0, axis=0, func1d=ent_img_log)
+                        ent_img_ent1 = np.apply_along_axis(arr=ent_img_pk1, axis=0, func1d=ent_img_log)
+                        entropy_image = ent_img_ent0 + ent_img_ent1
+                        sum_ent = np.sum(entropy_image.flatten())
+
+                        endTMP = timer()
+                        timeTMP = (endTMP - startTMP)
+                        print("Entropy calc " + str(timeTMP ) + "s (" + str(timeTMP  / 60.0) + "min)")
+
+                        startTMP = timer()
+
+                        bald_diff_image = np.apply_along_axis(arr=predictions, axis=0, func1d=BALD_diff)
+
+                        bald_image = -1 * ( entropy_image - bald_diff_image )
+                        sum_bald = np.sum(bald_image.flatten())
+
+                        endTMP = timer()
+                        timeTMP = (endTMP - startTMP)
+                        print("BALD calc " + str(timeTMP ) + "s (" + str(timeTMP / 60.0) + "min)")
+
 
                     #startTMP = timer()
 
@@ -652,8 +675,9 @@ def main(args):
 
                 overall_indices  = np.append(overall_indices, remaining_indices)
 
-                #if len(entropies_over_samples) > 120:
-                #    break # few batches only
+                if DEBUG_skip_loading_most_of_data_batches:
+                    if len(entropies_over_samples) > 120:
+                        break # few batches only
 
         #print("debug ,,,")
         #print("entropies_over_samples",entropies_over_samples)

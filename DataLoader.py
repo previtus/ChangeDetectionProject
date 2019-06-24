@@ -40,7 +40,7 @@ class DataLoader(object):
         hdf5_file.create_dataset("labels", data=labels, dtype="float32")
         hdf5_file.close()
 
-        print("Saved", SUBSET, "images successfully to:", hdf5_path)
+        #print("Saved", SUBSET, "images successfully to:", hdf5_path)
 
         return hdf5_path
 
