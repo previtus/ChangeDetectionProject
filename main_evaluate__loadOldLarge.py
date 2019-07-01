@@ -219,7 +219,7 @@ for model_idx in [2, 3, 4]: # 0 and 1 are done
     tiles_f1 = sklearn.metrics.f1_score(ground_truths_classlabels, predicted_total_classlabels)
     print("tiles_f1=", tiles_f1)
 
-	# BONUS STATS ON TILES === conf, TPR and FPR
+    # BONUS STATS ON TILES === conf, TPR and FPR
     labels = ["no change", "change"]
     report = str(sklearn.metrics.classification_report(ground_truths_classlabels, predicted_total_classlabels, target_names=labels))
     print(report)
@@ -248,7 +248,7 @@ for model_idx in [2, 3, 4]: # 0 and 1 are done
 
     print(conf_str)
 	
-	# BONUS STATS ON TILES === annotation cost
+    # BONUS STATS ON TILES === annotation cost
     predicted_total = np.load(path_large_files_backup_sol + folder_name + "/" + "BatchI-" + str(model_idx) + "_predicted_total.npy")
     gts_total = np.load(path_large_files_backup_sol + folder_name + "/" + "BatchI-" + str(model_idx) + "_gts_total.npy")
 

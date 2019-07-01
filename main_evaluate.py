@@ -2,6 +2,13 @@ import matplotlib, os
 if not('DISPLAY' in os.environ):
     matplotlib.use("Agg")
 
+
+# CPU ONLY HAX!
+#import os
+#os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+#os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+
 import DataLoader, DataPreprocesser, Dataset, Debugger, Settings, ModelHandler, Evaluator
 from timeit import default_timer as timer
 from datetime import *
@@ -38,7 +45,6 @@ INPUT_FILE_EXCLUSIONS = "/home/ruzickav/python_projects/ChangeDetectionProject/_
 
 # weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet50-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_2z5]
 INPUT_FILE_EXCLUSIONS = "/home/ruzickav/python_projects/ChangeDetectionProject/__OUTPUTS/ResNet50_ManualExclusions_5folds_withVal.txt"
-#INPUT_FILE_EXCLUSIONS = ""
 star = '*resnet50-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_*'
 model_used = "resnet50"
 
@@ -46,6 +52,7 @@ model_used = "resnet50"
 # NEW ONES - looking at ResNet34, same stats as the rest (baseline for AL methods)
 # weightsModel2_cleanManual_100ep_ImagenetWgenetW_resnet34-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_0z5]
 
+# Call this [X]
 INPUT_FILE_EXCLUSIONS = "" # < to compare with AL, no exclusions
 star = '*resnet34-16batch_Augmentation1to1_ClassWeights1to3_TestVal_[KFold_*'
 model_used = "resnet34"
