@@ -39,7 +39,7 @@ class DatasetInstance_OurAerial(object):
 
         self.save_path_ = "OurAerial_preloadedImgs_sub"
 
-        if self.variant == "256" or self.variant == "256_clean" or self.variant == "256_cleanManual_noOver" or self.variant == "256_cleanManual":
+        if self.variant == "256_cleanManual_noOver" or self.variant == "256_cleanManual":
             self.dataset_version = "256x256_over32"
             if self.variant == "256_clean":
                 self.dataset_version = "256x256_over32_clean"
@@ -57,25 +57,13 @@ class DatasetInstance_OurAerial(object):
             self.CHANNEL_NUMBER = 4
             self.LOAD_BATCH_INCREMENT = 10000 # loads in this big batches for each balancing
 
-            self.bigger_than_percent = 8.0  # 8.0 from full set
-            self.smaller_than_percent = 1.0  # 3.0 ?
-
             self.default_raster_shape = (256,256,4)
             self.default_vector_shape = (256,256)
-
-            # decent dataset:
-            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL8.0_1.0_sel1428_res256x256.h5"
 
             # spliting <1428>
             # 1200 train, 100 val, 128 test
             self.split_train = 1200
             self.split_val = 1300
-
-            if self.variant == "256_clean":
-                self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL8.0_1.0_sel1086_res256x256.h5"
-                # 1086 in total
-                self.split_train = 900
-                self.split_val = 1000
 
             if self.variant == "256_cleanManual":
                 # needs also the source images without overlap!
@@ -88,39 +76,6 @@ class DatasetInstance_OurAerial(object):
 
                 self.split_train = 1900
                 self.split_val = 2000
-
-
-        elif self.variant == "112" or self.variant == "112_clean":
-            self.dataset_version = "112x112"
-            if self.variant == "112_clean":
-                self.dataset_version = "112x112_clean"
-            #self.SUBSET = 118667
-            self.SUBSET = -1
-            self.LOAD_BATCH_INCREMENT = 100000
-
-
-            self.IMAGE_RESOLUTION = 112
-            self.CHANNEL_NUMBER = 4
-
-            self.bigger_than_percent = 18.0  # 18.0
-            self.smaller_than_percent = 1.0  # 5.0
-
-            self.default_raster_shape = (112, 112, 4)
-            self.default_vector_shape = (112, 112)
-
-            # decent dataset:
-            self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel2380_res112x112.h5"
-
-            # spliting <2380>
-            # 2200 train, 100 val, 80 test
-            self.split_train = 2200
-            self.split_val = 2300
-
-            if self.variant == "112_clean":
-                self.hdf5_path = self.settings.large_file_folder + "datasets/OurAerial_preloadedImgs_subBAL18.0_1.0_sel2212_res112x112.h5"
-                # 2212 in total
-                self.split_train = 2000
-                self.split_val = 2100
 
         elif self.variant == "6368_special":
             self.local_setting_skip_rows = 0
@@ -468,7 +423,7 @@ class DatasetInstance_OurAerial(object):
 
     def load_paths_from_folders(self):
 
-        if self.variant == "256" or self.variant == "256_clean" or self.variant == "256_cleanManual":
+        if self.variant == "256_cleanManual":
             # 256x256 version
 
             paths_2012 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2012_strip1_256x256_over32_png/",
@@ -494,36 +449,8 @@ class DatasetInstance_OurAerial(object):
             # paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip7/","/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip8/"]
             # paths_2012 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2012_strip7_256x256_over32_png/","/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2012_strip8_256x256_over32_png/"]
             # paths_2015 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2015_strip7_256x256_over32_png/","/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/2015_strip8_256x256_over32_png/"]
-        if self.variant == "256":
-            # 256x256 version
 
-            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip1/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip2/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip3/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip4/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip5/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip6/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip7/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip8/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip9/"]
-
-            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_256x256_32ov/vectorLabels/strip5/"]
-        elif self.variant == "256_clean":
-            # 256x256 version
-
-            start_dir = "/home/pf/pfstaff/projects/ruzicka/dataset_initial_view(secondInst)/03_06_vectorStrips_areaOnlyBiggerThan40/vector_strips_a40p_256x256_32over/"
-            paths_vectors = [   "vector_strip_1_a40p_256_32over/",
-                                "vector_strip_2_a40p_256_32over/",
-                                "vector_strip_3_a40p_256_32over/",
-                                "vector_strip_4_a40p_256_32over/",
-                                "vector_strip_5_a40p_256_32over/",
-                                "vector_strip_6_a40p_256_32over/",
-                                "vector_strip_7_a40p_256_32over/",
-                                "vector_strip_8_a40p_256_32over/",
-                                "vector_strip_9_a40p_256_32over/"]
-            paths_vectors = [start_dir + f for f in paths_vectors]
-
-        elif self.variant == "256_cleanManual":
+        if self.variant == "256_cleanManual":
             # 256x256 version
 
             start_dir = "/home/pf/pfstaff/projects/ruzicka/CleanedVectors_manually_256x256_32over/"
@@ -539,55 +466,6 @@ class DatasetInstance_OurAerial(object):
 
             paths_vectors = [start_dir + f for f in paths_vectors]
 
-
-        if self.variant == "112" or self.variant == "112_clean":
-            # 112x112 version
-
-            paths_2012 =   ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip1_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip2_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip3_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip4_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip5_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip6_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip7_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip8_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2012_strip9_112x112_png/",]
-
-            paths_2015 = [
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip1_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip2_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip3_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip4_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip5_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip6_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip7_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip8_112x112_png/",
-                            "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/2015_strip9_112x112_png/"]
-
-        if  self.variant == "112":
-            # 112x112 version
-            paths_vectors = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip1/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip2/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip3/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip4/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip5/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip6/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip7/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip8/",
-                             "/home/pf/pfstaff/projects/ruzicka/TiledDataset_112x112/vectorLabels/vector_strip9/"
-                             ]
-        elif self.variant == "112_clean":
-            start_dir = "/home/pf/pfstaff/projects/ruzicka/dataset_initial_view(secondInst)/03_06_vectorStrips_areaOnlyBiggerThan40/vector_strips_a40p_112x112/"
-            paths_vectors = [   "vector_strip_1_a40p/",
-                                "vector_strip_2_a40p/",
-                                "vector_strip_3_a40p/",
-                                "vector_strip_4_a40p/",
-                                "vector_strip_5_a40p/",
-                                "vector_strip_6_a40p/",
-                                "vector_strip_7_a40p/",
-                                "vector_strip_8_a40p/",
-                                "vector_strip_9_a40p/"]
-            paths_vectors = [start_dir + f for f in paths_vectors]
 
         if  self.variant == "6368_special":
             paths_2012 = ["/home/pf/pfstaff/projects/ruzicka/TiledDataset_6368x6368px_large/2012_strip2_6368tiles/"]

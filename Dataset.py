@@ -1,5 +1,5 @@
 import DataLoader, DataPreprocesser, Debugger
-import DatasetInstance_OurAerial, DatasetInstance_ONERA
+import DatasetInstance_OurAerial
 import numpy as np
 
 
@@ -24,7 +24,6 @@ class Dataset(object):
         dataset_variant = "256_cleanManual"
         ###dataset_variant = "6368_special"
         self.datasetInstance = DatasetInstance_OurAerial.DatasetInstance_OurAerial(self.settings, self.dataLoader, dataset_variant)
-        #self.datasetInstance = DatasetInstance_ONERA.DatasetInstance_ONERA(settings, self)
 
         number_of_channels = self.datasetInstance.CHANNEL_NUMBER
         self.dataPreprocesser = DataPreprocesser.DataPreprocesser(self.settings,number_of_channels)
