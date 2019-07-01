@@ -221,15 +221,18 @@ class LargeDatasetHandler_AL(object):
         lefts = {}
         rights = {}
         if not skip_data:
-            for idx in tqdm(lefts_paths):
+            for idx in lefts_paths:
+                #for idx in tqdm(lefts_paths):
                 path = lefts_paths[idx]
                 lefts[idx] = Helpers.load_raster_image(path)
-            for idx in tqdm(rights_paths):
+            for idx in rights_paths:
+                #for idx in tqdm(rights_paths):
                 path = rights_paths[idx]
                 rights[idx] = Helpers.load_raster_image(path)
         labels = {}
         if not skip_labels:
-            for idx in tqdm(labels_paths):
+            for idx in labels_paths:
+                #for idx in tqdm(labels_paths):
                 path = labels_paths[idx]
                 labels[idx] = Helpers.load_vector_image(path)
 
@@ -239,6 +242,7 @@ class LargeDatasetHandler_AL(object):
             for idx in labels.keys():
                 labels_in_memory[idx] = labels[idx]
 
+        print("100%|██████████| < Loaded")
         return data_in_memory, labels_in_memory
 
     def load_images_into_memory_from_h5_file(self, hdf5_path):
@@ -313,20 +317,23 @@ class LargeDatasetHandler_AL(object):
         labels = np.asarray(labels).astype('float32')
         corresponding_indices = np.asarray(indices).astype('int')
 
-        print("Loaded (before removal):", len(lefts), "lefts, ", len(rights), "rights and", len(labels), "labels with",
+        if self.settings.verbose > 1:
+            print("Loaded (before removal):", len(lefts), "lefts, ", len(rights), "rights and", len(labels), "labels with",
               len(corresponding_indices), "indices.")
 
-        if self.original_indices is not None:
-            print("debug: len(self.original_indices)", len(self.original_indices))
-        if self.indices is not None:
-            print("debug: len(self.indices)", len(self.indices))
+            if self.original_indices is not None:
+                print("debug: len(self.original_indices)", len(self.original_indices))
+            if self.indices is not None:
+                print("debug: len(self.indices)", len(self.indices))
 
         # we don't care about the removed indices
         # removed indices = all (original) indices - current indices
         removed_indices = [idx for idx in self.original_indices if idx not in self.indices]
-        print("debug: len(removed_indices)", len(removed_indices))
         remaining_indices = [idx for idx in corresponding_indices if idx not in removed_indices]
-        print("debug: len(remaining_indices)", len(remaining_indices))
+
+        if self.settings.verbose > 1:
+            print("debug: len(removed_indices)", len(removed_indices))
+            print("debug: len(remaining_indices)", len(remaining_indices))
 
         for idx in range(len(lefts)):
             orig_idx = corresponding_indices[idx]
@@ -338,8 +345,9 @@ class LargeDatasetHandler_AL(object):
             if orig_idx not in removed_indices:
                 labels_in_memory[orig_idx] = labels[idx]
 
-        print("debug: len(data_in_memory.keys())", len(data_in_memory.keys()))
-        print("debug: len(labels_in_memory.keys())", len(labels_in_memory.keys()))
+        if self.settings.verbose > 1:
+            print("debug: len(data_in_memory.keys())", len(data_in_memory.keys()))
+            print("debug: len(labels_in_memory.keys())", len(labels_in_memory.keys()))
 
         return data_in_memory, labels_in_memory, remaining_indices
 

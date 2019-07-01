@@ -61,7 +61,8 @@ class Evaluator(object):
             #print("predicted_Tiles>",np.asarray(predicted_Tiles).shape)
 
             xs.append(thr)
-            print("threshold=",thr)
+            if self.settings.verbose > 2:
+                print("threshold=",thr)
             #_, recall, precision, accuracy = self.calculate_metrics(predicted, labels, threshold=thr)
             if "NoChange" in title_txt:
                 print("from the position of NoChange class instead...")
@@ -74,11 +75,12 @@ class Evaluator(object):
             ys_accuracies.append(accuracy)
             ys_f1s.append(f1)
 
-        print("xs", len(xs), xs)
-        print("ys_recalls", len(ys_recalls), ys_recalls)
-        print("ys_precisions", len(ys_precisions), ys_precisions)
-        print("ys_accuracies", len(ys_accuracies), ys_accuracies)
-        print("ys_f1s", len(ys_f1s), ys_f1s)
+        if self.settings.verbose > 2:
+            print("xs", len(xs), xs)
+            print("ys_recalls", len(ys_recalls), ys_recalls)
+            print("ys_precisions", len(ys_precisions), ys_precisions)
+            print("ys_accuracies", len(ys_accuracies), ys_accuracies)
+            print("ys_f1s", len(ys_f1s), ys_f1s)
 
         if title_txt == "":
             plt.title('Changing the threshold values')
@@ -123,10 +125,12 @@ class Evaluator(object):
         ys_f1s= []
         for thr in range_values: #np.arange(0.0,1.0,0.01):
             xs.append(thr)
-            print("threshold=",thr)
+            if self.settings.verbose > 2:
+                print("threshold=",thr)
             #_, recall, precision, accuracy = self.calculate_metrics(predicted, labels, threshold=thr)
             if "NoChange" in title_txt:
-                print("from the position of NoChange class instead...")
+                if self.settings.verbose > 2:
+                    print("from the position of NoChange class instead...")
                 recall, precision, accuracy, f1 = self.calculate_recall_precision_accuracy_NOCHANGECLASS(predicted, labels, threshold=thr, need_f1=True)
             else:
                 recall, precision, accuracy, f1 = self.calculate_recall_precision_accuracy(predicted, labels, threshold=thr, need_f1=True)
@@ -136,11 +140,12 @@ class Evaluator(object):
             ys_accuracies.append(accuracy)
             ys_f1s.append(f1)
 
-        print("xs", len(xs), xs)
-        print("ys_recalls", len(ys_recalls), ys_recalls)
-        print("ys_precisions", len(ys_precisions), ys_precisions)
-        print("ys_accuracies", len(ys_accuracies), ys_accuracies)
-        print("ys_f1s", len(ys_f1s), ys_f1s)
+        if self.settings.verbose > 2:
+            print("xs", len(xs), xs)
+            print("ys_recalls", len(ys_recalls), ys_recalls)
+            print("ys_precisions", len(ys_precisions), ys_precisions)
+            print("ys_accuracies", len(ys_accuracies), ys_accuracies)
+            print("ys_f1s", len(ys_f1s), ys_f1s)
 
         if title_txt == "":
             plt.title('Changing the threshold values')
@@ -599,8 +604,8 @@ class Evaluator(object):
 
         plt.figure() # figsize=(w, h)
 
-        print("xs", len(xs), xs)
-        print("ys", len(ys), ys)
+        #print("xs", len(xs), xs)
+        #print("ys", len(ys), ys)
         lw = 2
 
         plt.title('Cost for given wanted recall')
@@ -659,9 +664,10 @@ class Evaluator(object):
         report_str = "If we want the recall to be better than "+str(wanted_recall)+\
                      ", we need to set the threshold to be = "+str(thresholds[best_recall_idx])+" which will give us " \
                      "recall of "+str(recalls[best_recall_idx])+" while the number of tiles needed to check is "+\
-                     str(best_recall_cost)+" from the worst case scenario "+str(N)+" (that's "+str(np.round(cost_perc, 2))+"%).\n\n"
+                     str(best_recall_cost)+" from the worst case scenario "+str(N)+" (that's "+str(np.round(cost_perc, 2))+"%).\n"
 
-        print(report_str)
+        if self.settings.verbose > 2:
+            print(report_str)
         return report_str, cost_perc
 
     # ================= Unified test func call:
@@ -689,14 +695,14 @@ class Evaluator(object):
         if len(models) > 1:
             ensemble_predictions = []
             for model in models:
-                print("predicting for the test set")
+                #print("predicting for the test set")
                 predicted = model.predict(x=[test_L, test_R], batch_size=4)
                 ensemble_predictions.append(predicted)
 
             if validation_set is not None:
                 ensemble_val_predictions = []
                 for model in models:
-                    print("predicting for the val set")
+                    #print("predicting for the val set")
                     predicted_val = model.predict(x=[val_L, val_R], batch_size=4)
                     ensemble_val_predictions.append(predicted_val)
 
@@ -706,13 +712,15 @@ class Evaluator(object):
 
             predicted_mean = np.mean(ensemble_predictions, axis=0)
 
-            print("predicted_ITHINK.shape", predicted_mean.shape, "should be the same as", predicted.shape)
-            print("first pixels")
-            for i in range(len(ensemble_predictions)):
-                print(ensemble_predictions[i][0][0][0])
-            print("avg into")
-            print(predicted_mean[0][0][0])
-            print("right? (they should!)")
+            if self.settings.verbose > 1:
+
+                print("predicted_ITHINK.shape", predicted_mean.shape, "should be the same as", predicted.shape)
+                print("first pixels")
+                for i in range(len(ensemble_predictions)):
+                    print(ensemble_predictions[i][0][0][0])
+                print("avg into")
+                print(predicted_mean[0][0][0])
+                print("right? (they should!)")
 
             predicted = predicted_mean
         else:
@@ -798,11 +806,12 @@ class Evaluator(object):
                                      show=show, save=save, name=name+"Pixels")
         pixels_xs_tresholds, pixels_ys_recalls, pixels_ys_precisions, pixels_ys_accuracies, pixels_ys_f1s = pixels_stats
 
-        print("xs_tresholds",pixels_xs_tresholds)
-        print("ys_recalls",pixels_ys_recalls)
-        print("ys_precisions",pixels_ys_precisions)
-        print("ys_accuracies",pixels_ys_accuracies)
-        print("ys_f1s",pixels_ys_f1s)
+        if self.settings.verbose > 2:
+            print("xs_tresholds",pixels_xs_tresholds)
+            print("ys_recalls",pixels_ys_recalls)
+            print("ys_precisions",pixels_ys_precisions)
+            print("ys_accuracies",pixels_ys_accuracies)
+            print("ys_f1s",pixels_ys_f1s)
         # for maximum we don't allow the end points thought
         pixels_max_f1_idx = np.argmax(pixels_ys_f1s[1:-1]) + 1
         pixels_best_thr = pixels_xs_tresholds[pixels_max_f1_idx]
@@ -820,12 +829,13 @@ class Evaluator(object):
                                                    show=show, save=save, name=name + "PixelsVAL")
             val_pixels_xs_tresholds, val_pixels_ys_recalls, val_pixels_ys_precisions, val_pixels_ys_accuracies, val_pixels_ys_f1s = validation_pixels_stats
 
-            print("val_pixels_xs_tresholds", val_pixels_xs_tresholds)
-            print("val_pixels_ys_recalls", val_pixels_ys_recalls)
-            print("val_pixels_ys_precisions", val_pixels_ys_precisions)
-            print("val_pixels_ys_accuracies", val_pixels_ys_accuracies)
-            print("val_pixels_ys_f1s", val_pixels_ys_f1s)
-            print("val_pixels_auc", val_pixels_auc)
+            if self.settings.verbose > 2:
+                print("val_pixels_xs_tresholds", val_pixels_xs_tresholds)
+                print("val_pixels_ys_recalls", val_pixels_ys_recalls)
+                print("val_pixels_ys_precisions", val_pixels_ys_precisions)
+                print("val_pixels_ys_accuracies", val_pixels_ys_accuracies)
+                print("val_pixels_ys_f1s", val_pixels_ys_f1s)
+                print("val_pixels_auc", val_pixels_auc)
             # for maximum we don't allow the end points thought
             val_pixels_max_f1_idx = np.argmax(val_pixels_ys_f1s[1:-1]) + 1
             val_pixels_best_thr = val_pixels_xs_tresholds[val_pixels_max_f1_idx]
@@ -862,12 +872,12 @@ class Evaluator(object):
                                      show=show, save=save, name=name+"Tiles")
 
         tiles_xs_tresholds, tiles_ys_recalls, tiles_ys_precisions, tiles_ys_accuracies, tiles_ys_f1s = tiles_stats
-
-        print("xs_tresholds",tiles_xs_tresholds)
-        print("ys_recalls",tiles_ys_recalls)
-        print("ys_precisions",tiles_ys_precisions)
-        print("ys_accuracies",tiles_ys_accuracies)
-        print("ys_f1s",tiles_ys_f1s)
+        if self.settings.verbose > 2:
+            print("xs_tresholds",tiles_xs_tresholds)
+            print("ys_recalls",tiles_ys_recalls)
+            print("ys_precisions",tiles_ys_precisions)
+            print("ys_accuracies",tiles_ys_accuracies)
+            print("ys_f1s",tiles_ys_f1s)
 
         tiles_max_f1_idx = np.argmax(tiles_ys_f1s[1:-1]) + 1
         tiles_best_thr = tiles_xs_tresholds[tiles_max_f1_idx]
@@ -882,12 +892,12 @@ class Evaluator(object):
                                                    title_txt="Tiles (tile 0/1) evaluated [Change Class] on ValidationSet",
                                                    show=show, save=save, name=name + "TilesVAL")
             val_tiles_xs_tresholds, val_tiles_ys_recalls, val_tiles_ys_precisions, val_tiles_ys_accuracies, val_tiles_ys_f1s = validation_tiles_stats
-
-            print("val_tiles_xs_tresholds", val_tiles_xs_tresholds)
-            print("val_tiles_ys_recalls", val_tiles_ys_recalls)
-            print("val_tiles_ys_precisions", val_tiles_ys_precisions)
-            print("val_tiles_ys_accuracies", val_tiles_ys_accuracies)
-            print("val_tiles_ys_f1s", val_tiles_ys_f1s)
+            if self.settings.verbose > 2:
+                print("val_tiles_xs_tresholds", val_tiles_xs_tresholds)
+                print("val_tiles_ys_recalls", val_tiles_ys_recalls)
+                print("val_tiles_ys_precisions", val_tiles_ys_precisions)
+                print("val_tiles_ys_accuracies", val_tiles_ys_accuracies)
+                print("val_tiles_ys_f1s", val_tiles_ys_f1s)
 
             # for maximum we don't allow the end points thought
             val_tiles_max_f1_idx = np.argmax(val_tiles_ys_f1s[1:-1]) + 1

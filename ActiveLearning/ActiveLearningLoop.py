@@ -610,7 +610,7 @@ def main(args):
                     print("Everything from this batch was deleted (during loading batchfiles), skipping to the next one...")
                     continue
                 remaining_data = batch[1]  # lefts and rights, no labels!
-                print("report on sizes of the batch = len(remaining_indices)", len(remaining_indices), "len(left)=len(remaining_data[0])=", len(remaining_data[0]))
+                #print("report on sizes of the batch = len(remaining_indices)", len(remaining_indices), "len(left)=len(remaining_data[0])=", len(remaining_data[0]))
 
                 print("MegaBatch (",len(entropies_over_samples),"/",RemainingUnlabeledSet.N_of_data,") of size ", len(remaining_indices), " = indices from id", remaining_indices[0], "to id", remaining_indices[-1])
                 processed_remaining = dataPreprocesser.apply_on_a_set_nondestructively(remaining_data, no_labels=True)
@@ -639,7 +639,8 @@ def main(args):
                         #test_L = test_L[0:subs]
                         #test_R = test_R[0:subs]
 
-                        print("Predicting for", nth, "model in the ensemble - for disagreement calculations (on predicted size=",len(test_L),")")
+                        if settings.verbose > 1:
+                            print("Predicting for", nth, "model in the ensemble - for disagreement calculations (on predicted size=",len(test_L),")")
                         predicted = model.predict(x=[test_L, test_R], batch_size=4)
                         predicted = predicted[:, :, :, 1] # 2 channels of softmax with 2 classes is useless - use just one
 
@@ -742,7 +743,7 @@ def main(args):
                 PredictionsEnsemble = np.asarray(PredictionsEnsemble) # [5, 894, 256, 256]
                 PredictionsEnsemble_By_Images = np.swapaxes(PredictionsEnsemble, 0, 1) # [894, 5, 256, 256]
 
-                print("PredictionsEnsemble_By_Images.shape", PredictionsEnsemble_By_Images.shape) # PredictionsEnsemble_By_Images.shape (5, 1, 175, 256, 256)
+                print("Finished predicting, got this PredictionsEnsemble_By_Images.shape (n samples, m models, 256x256)", PredictionsEnsemble_By_Images.shape) # PredictionsEnsemble_By_Images.shape (5, 1, 175, 256, 256)
 
                 resolution = len(PredictionsEnsemble[0][0]) # 256
 

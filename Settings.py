@@ -13,6 +13,6 @@ class Settings(object):
 
         self.verbose = 1
         # 0 = zip it!
-        # 1 = print important info for run
+        # 1 = print important info for run, keeping it minimal
         # 2 = print a lot of stuff
         # 3 = debugger level of details and checks

@@ -310,22 +310,22 @@ class Debugger(object):
             data = [loss, val_loss, accuracy, val_accuracy]
             columns = ['loss', 'val_loss', 'acc', 'val_acc']
 
-        print(data)
-        print(columns)
 
         if len(added_plots)>0:
             for item in added_plots:
                 data += [history.history[item]]
                 columns += [item]
 
-        print(data)
-        print(columns)
+        if self.settings.verbose > 2:
+            print(data)
+            print(columns)
 
         df = pd.DataFrame(data)
         df = df.transpose()
         df.columns = columns
 
-        print(df)
+        if self.settings.verbose > 2:
+            print(df)
 
         accuracies = []
         losses = []

@@ -176,13 +176,20 @@ class TrainTestHandler(object):
         broken_flag = False
         failed_training_flag = False
 
-        history = model.fit([train_L, train_R], train_V, batch_size=batch, epochs=epochs, verbose=2,
+        history = model.fit([train_L, train_R], train_V, batch_size=batch, epochs=epochs, verbose=0,
                                          validation_data=([val_L, val_R], val_V) )#, callbacks=callbacks
 
         history.history["acc"] = history.history["categorical_accuracy"]  # we care about this one to show
         history.history["val_acc"] = history.history["val_categorical_accuracy"]
 
-        print(history.history)
+        print("Trained",epochs,"epochs, last epoch with")
+        print(" - loss:", history.history["loss"][-1], " - categorical_accuracy: ", history.history["categorical_accuracy"][-1],
+              " - mean_squared_error: ", history.history["mean_squared_error"][-1])
+        print(" - val_loss: ", history.history["val_loss"][-1],
+              " - val_categorical_accuracy: ", history.history["val_categorical_accuracy"][-1],  " - val_mean_squared_error: ", history.history["val_mean_squared_error"][-1])
+
+        if self.settings.verbose > 2:
+            print("history.history =", history.history)
         self.debugger.nice_plot_history(history,added_plots = [], save=True, show=False, name=name+"_training", max_y=FailSafe__ValLossThr)
 
         # Fail safe - failed_training_flag
