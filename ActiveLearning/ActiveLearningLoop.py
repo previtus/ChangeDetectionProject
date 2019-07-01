@@ -72,8 +72,6 @@ def main(args):
 
     args_name = args.name
 
-    random.seed(seed_num) # samples
-    numpy.random.seed(seed_num) # shuffles
 
     # keras and it's training is not influenced by this
 
@@ -106,7 +104,9 @@ def main(args):
     acquisition_function = args.AL_AcquisitionFunction #"Variance" / "Entropy" / ""
     ModelEnsemble_N = int(args.AL_Ensemble_numofmodels)
 
-    if acquisition_function_mode is not "Ensemble":
+    if acquisition_function_mode == "Random":
+        ModelEnsemble_N = 1
+    if acquisition_function_mode == "MonteCarloBatchNormalization":
         ModelEnsemble_N = 1
 
     MCBN_T = int(args.AL_MCBN_numofruns)
@@ -118,6 +118,9 @@ def main(args):
     DEBUG_loadLastALModels = (args.DEBUG_loadLastALModels == 'True')
     DEBUG_skip_evaluation = False
     DEBUG_skip_loading_most_of_data_batches = False # Doesnt do what it should otherwise ...
+    # SHOULD REMAIN HARDCODED:
+    DEBUG_CLEANMEM_FOR_20_MODELS = True
+
     threshold_fineness = 0.05 # default
 
     # New feature, failsafe for models in Ensembles ...
@@ -141,6 +144,12 @@ def main(args):
     ###acquisition_function_mode = "Ensemble"
     ###acquisition_function_mode = "MonteCarloBatchNormalization" # <<< Work in progress ...
     """
+
+
+    random.seed(seed_num) # samples
+    numpy.random.seed(seed_num) # shuffles
+
+
     ## Loop starts with a small train set (INITIAL_SAMPLE_SIZE)
     ## then adds some number every iteration (ITERATION_SAMPLE_SIZE)
     ## also every iteration tests on a selected test sample
@@ -190,7 +199,7 @@ def main(args):
     ValSet.add_items(packed_items)
     print("Validation set:")
     ValSet.report()
-    N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
+    N_change_val, N_nochange_val = ValSet.report_balance_of_class_labels()
     print("are we balanced in the val set?? Change:NoChange",N_change_val, N_nochange_val)
 
 
@@ -204,6 +213,14 @@ def main(args):
     packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
     TrainSet.add_items(packed_items)
 
+
+
+    RemainingUnlabeledSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    TestSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    ValSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    TrainSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+
+
     # === Model and preprocessors
 
     test_data, test_paths, _ = TestSet.get_all_data_as_arrays()
@@ -212,6 +229,8 @@ def main(args):
     dataPreprocesser = DataPreprocesser_dataIndependent(settings, number_of_channels=4)
     trainTestHandler = TrainTestHandler(settings)
     evaluator = Evaluator(settings)
+    evaluator.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
 
     # === Start looping:
     tiles_recalls = []
@@ -271,6 +290,10 @@ def main(args):
         ModelEnsemble_N = int(ModelEnsemble_N)
         MCBN_T = int(MCBN_T)
         ENSEMBLE_tmp_how_many_from_random = int(ENSEMBLE_tmp_how_many_from_random)
+        # this may cause "is not" to not work as expected btw ...
+        # loads as  <class 'numpy.str_'> -> into str()
+        acquisition_function_mode = str(acquisition_function_mode)
+        acquisition_function = str(acquisition_function)
 
         augmentation = (augmentation == "True")
         DEBUG_loadLastALModels = (DEBUG_loadLastALModels == "True")
@@ -287,6 +310,9 @@ def main(args):
         IterationRange = list(range((done_iterations + 1), N_ITERATIONS))
         print("Resuming from having finished iteration ", done_iterations, " remaining:", IterationRange)
 
+        evaluator.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+        settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+
         # rebuild the sets ..............................................................................
         set_indices = np.load(all_sets_resume)
         TrainSetIndices, ValSetIndices, RemainingSetIndices, TestSetIndices = set_indices
@@ -298,6 +324,13 @@ def main(args):
         ValSet = LargeDatasetHandler_AL(settings, "inmemory")
         TrainSet = LargeDatasetHandler_AL(settings, "inmemory")
         RemainingUnlabeledSet = LargeDatasetHandler_AL(settings, "ondemand")
+        RemainingUnlabeledSet.original_indices = WholeUnlabeledSet.original_indices
+        RemainingUnlabeledSet.N_of_data = WholeUnlabeledSet.N_of_data
+        RemainingUnlabeledSet.per_tile_class = WholeUnlabeledSet.per_tile_class
+        RemainingUnlabeledSet.has_per_tile_class_computed = WholeUnlabeledSet.has_per_tile_class_computed
+        RemainingUnlabeledSet.dataaug_descriptors = WholeUnlabeledSet.dataaug_descriptors
+        RemainingUnlabeledSet.paths = WholeUnlabeledSet.paths
+        RemainingUnlabeledSet.settings = WholeUnlabeledSet.settings
 
         trainset_packed_items = WholeUnlabeledSet.pop_items(TrainSetIndices)
         TrainSet.add_items(trainset_packed_items)
@@ -315,20 +348,21 @@ def main(args):
 
         print("RemainingUnlabeledSet set:")
         RemainingUnlabeledSet.report()
+        print("RemainingUnlabeledSet.N_of_data = ", RemainingUnlabeledSet.N_of_data)
 
         print("Train set:")
         TrainSet.report()
-        N_change_test, N_nochange_test = TrainSet.report_balance_of_class_labels()
+        #N_change_test, N_nochange_test = TrainSet.report_balance_of_class_labels()
         print("are we balanced in the train set?? Change:NoChange", N_change_test, N_nochange_test)
 
         print("Test set:")
         TestSet.report()
-        N_change_test, N_nochange_test = TestSet.report_balance_of_class_labels()
+        #N_change_test, N_nochange_test = TestSet.report_balance_of_class_labels()
         print("are we balanced in the test set?? Change:NoChange", N_change_test, N_nochange_test)
 
         print("Validation set:")
         ValSet.report()
-        N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
+        #N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
         print("are we balanced in the val set?? Change:NoChange", N_change_val, N_nochange_val)
 
         print("======================================")
@@ -359,6 +393,8 @@ def main(args):
         file.close()
 
         print("\n")
+        print("==========================================================")
+        print("Folder >>> ", DEBUG_SAVE_ALL_THR_PLOTS)
         print("==========================================================")
         print("\n")
 
@@ -493,8 +529,8 @@ def main(args):
         from keras.utils import to_categorical
 
         if acquisition_function_mode == "MonteCarloBatchNormalization":
-            print("Started with the MCBN preparation - first we save the current model (to later reset to it for each MCBN iteration)... into > AL_model_original_for_MCBN.h5")
-            ModelEnsemble[0].model.save(settings.large_file_folder+"AL_model_original_for_MCBN.h5")
+            print("Started with the MCBN preparation - first we save the current model (to later reset to it for each MCBN iteration)... into > AL_model_original_for_MCBN" + settings.tmp_marker + ".h5")
+            ModelEnsemble[0].model.save(settings.large_file_folder+"AL_model_original_for_MCBN" + settings.tmp_marker + ".h5")
             #make N copies of the model - train each a bit away with its BN's
 
             train_L, train_R, train_V = processed_val
@@ -509,9 +545,12 @@ def main(args):
 
             train_data_indices = list(range(0, len(train_L)))
 
+            if DEBUG_CLEANMEM_FOR_20_MODELS:
+                keras.backend.clear_session() # the model is saved, no longer needed in mem
+
             for MC_iteration in range(MCBN_T):
                 model_new_h = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
-                model_new_h.load(settings.large_file_folder+"AL_model_original_for_MCBN.h5")
+                model_new_h.load(settings.large_file_folder+"AL_model_original_for_MCBN" + settings.tmp_marker + ".h5")
                 model = model_new_h.model
 
                 selected_indices = random.sample(train_data_indices, batch_size_mctrain * 4)
@@ -539,12 +578,17 @@ def main(args):
                         # freeeze layer which is not BN:
                         layer.trainable = False
 
-                print("Separately training an MCBN model", MC_iteration, " into > "+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
+                print("Separately training an MCBN model", MC_iteration, " into > "+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + settings.tmp_marker + ".h5")
                 model.fit(x=[train_sample[0], train_sample[1]], y=train_sample_labels, batch_size=batch_size_mctrain, epochs=25, verbose=2)
 
                 # ModelEnsemble.append(model_new_h)
-                model_new_h.save(settings.large_file_folder+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + ".h5")
+                model_new_h.save(settings.large_file_folder+"AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(2) + settings.tmp_marker + ".h5")
                 del model_new_h
+
+                # With lots of models this also explodes - will have to Keras Clean
+                if DEBUG_CLEANMEM_FOR_20_MODELS:
+                    keras.backend.clear_session() # the model is saved, no longer needed in mem
+
 
         # this is not necessary for Random ...
         if acquisition_function_mode == "Ensemble" or acquisition_function_mode == "MonteCarloBatchNormalization":
@@ -651,14 +695,14 @@ def main(args):
                         # now the models are the same ...
                         model_h.load(
                             settings.large_file_folder + "AL_model_original_for_MCBN_T" + str(MC_iteration).zfill(
-                                2) + ".h5")
+                                2) + settings.tmp_marker + ".h5")
                         model = model_h.model
                         f = K.function([model.layers[0].input, model.layers[1].input, K.learning_phase()],
                                        [model.layers[
                                             -1].output])  # potentially wasting memory over time? this probably adds tf items
 
                         minibatch_i = 0
-                        while minibatch_i < samples_N_BIGBatch:
+                        while minibatch_i < samples_N_BIGBatch: # ps: this is the slowpoke - predicting 4 samples per loop
                             a = minibatch_i
                             b = min(minibatch_i + minibatch_size, samples_N_BIGBatch)
                             minibatch_i += minibatch_size
@@ -675,13 +719,14 @@ def main(args):
                             print("(mini)predicted.shape", sample.shape)
 
                             predictions_for_sample[MC_iteration, a:b, :, :] = predicted
-                            print("predictions_for_sample.shape", predictions_for_sample.shape) # (5, 175, 256, 256)
+                            print("predictions_for_sample.shape", predictions_for_sample.shape) # (5, 175, 256, 256) # this fills 4 samples per iteration until cca 1049 (+- batch prop)
 
                             del sample
                             del predicted
 
-                        keras.backend.clear_session()  # ??? will this not ruin it all?
-                        # maybe ok, i'll load the model each time anyway, no?
+                        print("got until (end of range) b=", b)
+
+                        keras.backend.clear_session() # necessary cleanup for GPU mem
 
                     PredictionsEnsemble = predictions_for_sample
                     ##############################################################################################
@@ -906,7 +951,7 @@ def main(args):
         tile_statistics = tiles_thresholds, xs_number_of_data, tiles_recalls, tiles_precisions, tiles_accuracies, tiles_f1s, Ns_changed, Ns_nochanged
         statistics = pixel_statistics, tile_statistics
         statistics = np.asarray(statistics)
-        #np.save("["+args_name+"]_al_statistics.npy", statistics)
+        np.save("["+args_name+"]_al_statistics.npy", statistics) # also, for easier checking
         np.save(DEBUG_SAVE_ALL_THR_FOLDER+"resume_statistics.npy", statistics)
 
 
@@ -944,17 +989,17 @@ def main(args):
 
         print("Train set:")
         TrainSet.report()
-        N_change_test, N_nochange_test = TrainSet.report_balance_of_class_labels()
+        #N_change_test, N_nochange_test = TrainSet.report_balance_of_class_labels()
         print("are we balanced in the train set?? Change:NoChange", N_change_test, N_nochange_test)
 
         print("Test set:")
         TestSet.report()
-        N_change_test, N_nochange_test = TestSet.report_balance_of_class_labels()
+        #N_change_test, N_nochange_test = TestSet.report_balance_of_class_labels()
         print("are we balanced in the test set?? Change:NoChange", N_change_test, N_nochange_test)
 
         print("Validation set:")
         ValSet.report()
-        N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
+        #N_change_val, N_nochange_val = TestSet.report_balance_of_class_labels()
         print("are we balanced in the val set?? Change:NoChange", N_change_val, N_nochange_val)
 
         print("=====<this was saved>=================================")

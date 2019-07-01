@@ -570,9 +570,7 @@ class Evaluator(object):
             number_of_ones = np.count_nonzero(mask.flatten()) # << loading takes care of this 0 vs non-zero
             array_of_number_of_change_pixels.append(number_of_ones)
 
-        # TODO: CONSIDER UNIQUE NAME AND ALSO DELETING? !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING")
-        array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING")
+        array_of_number_of_change_pixels = np.asarray(array_of_number_of_change_pixels)
 
         array_of_number_of_change_pixels = array_of_number_of_change_pixels / (
                 img_resolution * img_resolution) * 100.0  # percentage of image changed

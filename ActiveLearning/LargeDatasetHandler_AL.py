@@ -92,8 +92,7 @@ class LargeDatasetHandler_AL(object):
             number_of_ones = np.count_nonzero(label_image.flatten()) # << loading takes care of this 0 vs non-zero
             array_of_number_of_change_pixels.append(number_of_ones)
 
-        self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING") # hax
-        array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING") # hax
+        array_of_number_of_change_pixels = np.asarray(array_of_number_of_change_pixels)
 
         array_of_number_of_change_pixels = array_of_number_of_change_pixels / (
                     IMAGE_RESOLUTION * IMAGE_RESOLUTION) * 100.0  # percentage of image changed
@@ -317,8 +316,10 @@ class LargeDatasetHandler_AL(object):
         print("Loaded (before removal):", len(lefts), "lefts, ", len(rights), "rights and", len(labels), "labels with",
               len(corresponding_indices), "indices.")
 
-        print("debug: len(self.original_indices)", len(self.original_indices))
-        print("debug: len(self.indices)", len(self.indices))
+        if self.original_indices is not None:
+            print("debug: len(self.original_indices)", len(self.original_indices))
+        if self.indices is not None:
+            print("debug: len(self.indices)", len(self.indices))
 
         # we don't care about the removed indices
         # removed indices = all (original) indices - current indices
@@ -395,7 +396,10 @@ class LargeDatasetHandler_AL(object):
             if mode == 'dataonly_LOADBATCHFILES':
                 # we do have to load all the files and check for samples randomly spread in them ...
                 # for that reason the loop_times will be always the max.
-                loop_times = len(self.original_indices) / BATCH_SIZE
+                if self.original_indices is not None:
+                    loop_times = len(self.original_indices) / BATCH_SIZE
+                else:
+                    loop_times = 83144 / BATCH_SIZE
 
             int_loop_times = int(np.floor(loop_times)) + 1
             # +1 => last batch will be with less samples (1224 instead of the full 2048)

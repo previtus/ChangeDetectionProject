@@ -822,11 +822,7 @@ class DatasetInstance_OurAerial(object):
         #print("We have these numbers of alive pixels:")
         #print(array_of_number_of_change_pixels)
 
-        self.debugger.save_arr(array_of_number_of_change_pixels)
-
-        # << skip it, if you can
-        array_of_number_of_change_pixels = self.debugger.load_arr()
-
+        array_of_number_of_change_pixels = np.asarray(array_of_number_of_change_pixels)
         array_of_number_of_change_pixels = array_of_number_of_change_pixels / (self.IMAGE_RESOLUTION*self.IMAGE_RESOLUTION) * 100.0 # percentage of image changed
 
 
@@ -879,9 +875,7 @@ class DatasetInstance_OurAerial(object):
         #print("We have these numbers of alive pixels:")
         #print(array_of_number_of_change_pixels)
 
-        self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING")
-        array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING")
-
+        array_of_number_of_change_pixels = np.asarray(array_of_number_of_change_pixels)
         array_of_number_of_change_pixels = array_of_number_of_change_pixels / (
                     self.IMAGE_RESOLUTION * self.IMAGE_RESOLUTION) * 100.0  # percentage of image changed
 
@@ -948,8 +942,7 @@ class DatasetInstance_OurAerial(object):
             number_of_ones = np.count_nonzero(mask.flatten()) # << loading takes care of this 0 vs non-zero
             array_of_number_of_change_pixels.append(number_of_ones)
 
-        self.debugger.save_arr(array_of_number_of_change_pixels, "BALANCING")
-        array_of_number_of_change_pixels = self.debugger.load_arr("BALANCING")
+        array_of_number_of_change_pixels = np.asarray(array_of_number_of_change_pixels)
 
         array_of_number_of_change_pixels = array_of_number_of_change_pixels / (
                     self.IMAGE_RESOLUTION * self.IMAGE_RESOLUTION) * 100.0  # percentage of image changed
