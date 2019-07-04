@@ -2,6 +2,7 @@ import numpy as np
 from tqdm import tqdm
 import ActiveLearning.HelperFunctions as Helpers
 import Debugger
+import random # shuffling meagabatches
 
 from random import sample
 
@@ -75,6 +76,17 @@ class LargeDatasetHandler_AL(object):
 
     def get_number_of_samples(self):
         return self.N_of_data
+
+    def get_id_from_left_path_fragment(self, left_path_fragment = "strip4-2012_3066.PNG"):
+        lefts_paths, rights_paths, labels_paths = self.paths
+
+        for key, val in lefts_paths.items():
+            if left_path_fragment in val:
+                return key #print(key)
+
+        #print("type(lefts_paths), len(lefts_paths)", type(lefts_paths), len(lefts_paths))
+        #print("lefts_paths.keys()", lefts_paths.keys())
+        return None # ! if we didn't find it!
 
     def report_balance_of_class_labels(self, DEBUG_GET_IDX=False):
         # we are interested in how many samples from "change" vs. "non-change" we have in our dataset
@@ -391,7 +403,7 @@ class LargeDatasetHandler_AL(object):
 
     # mode > indices, dataonly, datalabels
     def generator_for_all_images(self, BATCH_SIZE=2048, mode='indices', custom_indices_to_sample_from = None, skip_i_batches = 0,
-                                 requested_exactly_these_indices_to_load = None):
+                                 requested_exactly_these_indices_to_load = None, shuffle_megabatches = False):
         # over time also returns all the images of the dataset, goes in the batches
         # see: https://github.com/keras-team/keras/issues/107
         LOOPING = 1
@@ -412,6 +424,16 @@ class LargeDatasetHandler_AL(object):
             int_loop_times = int(np.floor(loop_times)) + 1
             # +1 => last batch will be with less samples (1224 instead of the full 2048)
 
+            batch_ids = []
+            for i in range(int_loop_times):
+                # 00i_2048_from83144.h5
+                #BATCH_ID = str(i).zfill(3) + "_" + str(BATCH_SIZE) + "_from" + str(self.N_of_data) + ".h5"
+                BATCH_ID = str(i).zfill(3) + "_" + str(BATCH_SIZE) + "_from83144.h5"
+                batch_ids.append(BATCH_ID)
+
+            if shuffle_megabatches:
+                random.shuffle(batch_ids)
+
             print("Dataset loop finished (loops ", loop_times, "with this generator), that is (int):", int_loop_times)
             for i in range(int_loop_times):
                 #if i % 125 == 0:
@@ -429,9 +451,8 @@ class LargeDatasetHandler_AL(object):
                 if i < skip_i_batches:
                     print("Skipped batch i=",i)
                     continue
-                # 00i_2048_from83144.h5
-                BATCH_ID = str(i).zfill(3) + "_" + str(BATCH_SIZE) + "_from" + str(self.N_of_data) + ".h5"
-                BATCH_ID = str(i).zfill(3) + "_" + str(BATCH_SIZE) + "_from83144.h5"
+
+                BATCH_ID = batch_ids[i]
 
                 if mode == 'indices':
                     data_batch = [selected_indices] # INDICES
@@ -852,6 +873,29 @@ def get_unbalanced_dataset(in_memory=False):
         WholeDataset.save_per_tile_class(npy_path)
 
     WholeDataset.load_per_tile_class(npy_path)
+
+    #WholeDataset.report()
+
+    # TODO: CLEANING OF NONESENSICAL ONES (from paths ideally)
+    # many more, saved in txt
+    f = open('exclude.txt', "r")
+    exclusion_list = f.readlines()
+    f.close()
+
+    exclusion_list = [str(a).strip() for a in exclusion_list]
+
+    #exclusion_list = ["strip4-2012_3066.PNG"]
+    ids_to_pop = []
+    for left_path in exclusion_list:
+        to_pop = WholeDataset.get_id_from_left_path_fragment(left_path)
+        if to_pop is not None:
+            ids_to_pop.append(to_pop)
+        else:
+            print(to_pop, left_path)
+            assert to_pop is not None # shouldnt happen, in that case we are doing something badly, stop
+
+    print("Would like to pop ", len(ids_to_pop), "unwanted data points!")
+    removed_items = WholeDataset.pop_items(ids_to_pop)
 
     WholeDataset.report()
 

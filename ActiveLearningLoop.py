@@ -19,6 +19,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Project: Deep Active Learning for Change detection on aerial images.')
 parser.add_argument('-name', help='run name - will output in this dir', default="Run-"+month+"-"+day)
 parser.add_argument('-seed', help='random seed (for multiple runs)', default="30")
+parser.add_argument('-uid', help='Unique ID (for automatic runners to differentiate between files)', default="O")
 
 parser.add_argument('-model_epochs', help='How many epochs will each model train?', default="100") #50? 100?
 parser.add_argument('-model_batchsize', help='How big batch size for each model? (This is limited by the GPUs memory)', default="16")
@@ -36,8 +37,8 @@ parser.add_argument('-AL_method', help='Sampling method (choose from "Random", "
 
 parser.add_argument('-AL_AcquisitionFunction', help='For any method other than Random (choose from "Variance", "Entropy", "BALD")', default="Variance")
 
-parser.add_argument('-AL_Ensemble_numofmodels', help='If we chose Ensemble, how many models are there?', default="3")
-parser.add_argument('-AL_MCBN_numofruns', help='If we chose Ensemble, how many models are there?', default="4")
+parser.add_argument('-AL_Ensemble_numofmodels', help='If we chose Ensemble, how many models are there?', default="5")
+parser.add_argument('-AL_MCBN_numofruns', help='If we chose Ensemble, how many models are there?', default="5")
 
 parser.add_argument('-DEBUG_remove_from_dataset', help='Debug to remove random samples without change from the original dataset...', default="40000")
 parser.add_argument('-DEBUG_loadLastALModels', help='Debug function - load last saved model weights instead of training ...', default="False")
@@ -63,6 +64,12 @@ def load_random_states(path):
     numpy.random.set_state(nprandom_state)
 
 
+# TODO:
+# TODO: - uid save and load
+# TODO: - approximate_megabatches and approximate_megabatches_percent into args + save and load
+# TODO:
+
+
 def main(args):
     args_txt = str(args)
     print(args_txt)
@@ -71,6 +78,8 @@ def main(args):
     seed_num = int(args.seed)
 
     args_name = args.name
+
+    uid = args.uid # as string # TODO:SAVE AND LOAD (maybe)
 
 
     # keras and it's training is not influenced by this
@@ -121,6 +130,10 @@ def main(args):
     # SHOULD REMAIN HARDCODED:
     DEBUG_CLEANMEM_FOR_20_MODELS = True
 
+
+    approximate_megabatches = True
+    approximate_megabatches_percent = 10.0 # todo: add as a param, add as a saved and loaded value
+
     threshold_fineness = 0.05 # default
 
     # New feature, failsafe for models in Ensembles ...
@@ -129,21 +142,51 @@ def main(args):
 
 
     # LOCAL OVERRIDES:
+
+    # Local run:
+    #""" still need to call this >
+    # -AL_method Ensemble -name CompRuns1_Seed30_Ensemble5_Var_take2 -AL_Ensemble_numofmodels 5 -seed 30 -train_augmentation True
     """
-    acquisition_function_mode = "Ensemble"
+    acquisition_function_mode = "MonteCarloBatchNormalization"
+    args_name = "TestRuns1e_SeedZ_MCBN5_4batchsize_4mcbnset_seemsGood" # can I?
+    print(str(args))
     ModelEnsemble_N = 1
-    INITIAL_SAMPLE_SIZE = 100
-    N_ITERATIONS = 2
-    epochs = 35
-    REMOVE_SIZE = 75000
+    MCBNBATCHSETTOTHESAME = 4
+    batch_size = 4
+    assert batch_size == MCBNBATCHSETTOTHESAME
+    MCBN_T = 5
+
+    seed_num = 50
+    augmentation = True
+    #resume = "/home/ruzickav/python_projects/ChangeDetectionProject/ActiveLearning/[CompRuns1_Seed50_Ensemble5_Var_take2]_iteration_06_debugThrOverview/" # > 1046min for 7,8,9
+    """
+
+
+    """
+    # FastestRun Settings:
+    epochs = 3
+    ModelEnsemble_N = 2
+    #DEBUG_skip_evaluation = True
+    DEBUG_skip_loading_most_of_data_batches = True  # Doesnt do what it should otherwise ...
+    FailSafe__ValLossThr = 1000.0 # basically ignore the size of err
+    acquisition_function_mode = "Random"
+    """
+
+    # Fast but still relatively real
+    """ # HAX
+    acquisition_function_mode = "Ensemble"
+    ModelEnsemble_N = 5
+    INITIAL_SAMPLE_SIZE = 600
+    N_ITERATIONS = 4
+    epochs = 100
+    REMOVE_SIZE = 40000
     #DEBUG_loadLastALModels = True
     #DEBUG_skip_evaluation = True # won't save the plots, but jumps directly to the AL acquisition functions
-    
+    FailSafe__ValLossThr = 5.0
     threshold_fineness = 0.1 # 0.05 makes nicer plots
-
+    """
     ###acquisition_function_mode = "Ensemble"
     ###acquisition_function_mode = "MonteCarloBatchNormalization" # <<< Work in progress ...
-    """
 
 
     random.seed(seed_num) # samples
@@ -202,8 +245,6 @@ def main(args):
     N_change_val, N_nochange_val = ValSet.report_balance_of_class_labels()
     print("are we balanced in the val set?? Change:NoChange",N_change_val, N_nochange_val)
 
-
-
     TrainSet = LargeDatasetHandler_AL(settings, "inmemory")
 
     # Initial bump of data
@@ -215,10 +256,10 @@ def main(args):
 
 
 
-    RemainingUnlabeledSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
-    TestSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
-    ValSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
-    TrainSet.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    RemainingUnlabeledSet.settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    TestSet.settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    ValSet.settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    TrainSet.settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
 
 
     # === Model and preprocessors
@@ -229,8 +270,8 @@ def main(args):
     dataPreprocesser = DataPreprocesser_dataIndependent(settings, number_of_channels=4)
     trainTestHandler = TrainTestHandler(settings)
     evaluator = Evaluator(settings)
-    evaluator.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
-    settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    evaluator.settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+    settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
 
     # === Start looping:
     tiles_recalls = []
@@ -251,6 +292,12 @@ def main(args):
     xs_number_of_data = []
     Ns_changed = []
     Ns_nochanged = []
+
+    timeS_training = [] # TODO ADD TO THE SAVED LOGS PERHAPS
+    timeS_testing = []
+    timeS_acquisition = []
+    timeS_other = []
+    timeS_whole_it = []
 
     IterationRange = list(range(N_ITERATIONS))
 
@@ -310,8 +357,8 @@ def main(args):
         IterationRange = list(range((done_iterations + 1), N_ITERATIONS))
         print("Resuming from having finished iteration ", done_iterations, " remaining:", IterationRange)
 
-        evaluator.settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
-        settings.tmp_marker = str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+        evaluator.settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
+        settings.tmp_marker = uid + str(seed_num) + acquisition_function_mode[0:3] + acquisition_function[0:3] + "_" + str(MCBN_T) + "_" + str(ModelEnsemble_N)
 
         # rebuild the sets ..............................................................................
         set_indices = np.load(all_sets_resume)
@@ -340,6 +387,7 @@ def main(args):
         ValSet.add_items(valset_packed_items)
         remainingset_packed_items = WholeUnlabeledSet.pop_items(RemainingSetIndices)
         RemainingUnlabeledSet.add_items(remainingset_packed_items)
+
 
         load_random_states(randomstates_resume)
         print("sample random -->", numpy.random.rand(1, 6))
@@ -383,7 +431,9 @@ def main(args):
         # survived to 0-5 = 6*500 = 3000 images (I think that then the RAM was filled ...)
 
         # Save args log:
-        DEBUG_SAVE_ALL_THR_FOLDER = "["+args_name+"]_iteration_"+str(active_learning_iteration).zfill(2)+"_debugThrOverview/"
+        if not os.path.exists("results/"):
+            os.makedirs("results/")
+        DEBUG_SAVE_ALL_THR_FOLDER = "results/["+args_name+"]_"+uid+"_iteration_"+str(active_learning_iteration).zfill(2)+"/"
         DEBUG_SAVE_ALL_THR_PLOTS = DEBUG_SAVE_ALL_THR_FOLDER+"iteration_"+str(active_learning_iteration).zfill(2)
         #DEBUG_SAVE_ALL_THR_PLOTS = None
         if not os.path.exists(DEBUG_SAVE_ALL_THR_FOLDER):
@@ -412,6 +462,11 @@ def main(args):
         Ns_changed.append(N_change)
         Ns_nochanged.append(N_nochange)
 
+        # this might come in handy as in the progress metric
+        file = open(DEBUG_SAVE_ALL_THR_FOLDER+"balance.txt", "w")
+        file.write("Change "+str(N_change)+" : NoChange "+str(N_nochange))
+        file.close()
+
         train_data, train_paths, _ = TrainSet.get_all_data_as_arrays()
         print("fitting the preprocessor on this dataset")
 
@@ -437,12 +492,23 @@ def main(args):
         Separate_Train_Eval__TrainAndSave = False # < this loads from the last interation (kept in case of mem errs)
         Separate_Train_Eval__TrainAndSave = not DEBUG_loadLastALModels # True in the command line means loading the file ...
 
+
+        """ # Local HAX, faster to get to section with variance etc
+        # save with
+        TMP__DontSave = False
+        # next runs load:
+        TMP__DontSave = True
+        Separate_Train_Eval__TrainAndSave = False
+        DEBUG_skip_evaluation = True
+        """
+
         for i in range(ModelEnsemble_N):
             modelHandler = ModelHandler_dataIndependent(settings, BACKBONE=model_backbone)
             ModelEnsemble.append(modelHandler)
             # These models have the same encoder part (same weights as loaded from the imagenet pretrained model)
             # ... however their decoder parts are initialized differently.
 
+        startTrain = timer()
 
         if Separate_Train_Eval__TrainAndSave:
             # === Train!:
@@ -494,7 +560,10 @@ def main(args):
                 modelHandler = ModelEnsemble[i]
                 modelHandler.load(root+"initTests_"+str(i))
 
+        endTrain = timer()
+        time_training = (endTrain - startTrain)
 
+        startTest = timer()
         if not DEBUG_skip_evaluation:
             print("Now I would test ...")
 
@@ -523,7 +592,12 @@ def main(args):
             tiles_f1s.append(tiles_selected_f1)
             tiles_thresholds.append(tiles_best_thr)
 
+        endTest = timer()
+        time_testing = (endTest - startTest)
+
         print("Add new samples as per AL paradigm ... acquisition_function_mode=",acquisition_function_mode)
+
+        startAcquisition = timer()
 
         import keras.backend as K
         from keras.utils import to_categorical
@@ -604,7 +678,7 @@ def main(args):
 
             # Yields a large batch sample
             #for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly'): <<<<< This is faster if we are on local PC and load relatively small amount of images.
-            for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly_LOADBATCHFILES'): # Yields a large batch sample
+            for batch in RemainingUnlabeledSet.generator_for_all_images(PER_BATCH, mode='dataonly_LOADBATCHFILES', shuffle_megabatches=True): # Yields a large batch sample
                 remaining_indices = batch[0]
                 if len(remaining_indices) == 0:
                     print("Everything from this batch was deleted (during loading batchfiles), skipping to the next one...")
@@ -662,7 +736,7 @@ def main(args):
                         test_L = test_L[:, :, :, 1:4]
                         test_R = test_R[:, :, :, 1:4]
 
-                    batch_size_mctest = 4  # as it was when training
+                    batch_size_mctest = MCBNBATCHSETTOTHESAME  # as it was when training
 
                     # For each sample?
                     samples_N_BIGBatch = len(test_L)
@@ -738,6 +812,9 @@ def main(args):
                     del f
                     del predictions_for_sample
 
+                del test_L
+                del test_R
+                del processed_remaining
 
                 # This is still inside this one batch!
                 PredictionsEnsemble = np.asarray(PredictionsEnsemble) # [5, 894, 256, 256]
@@ -747,124 +824,91 @@ def main(args):
 
                 resolution = len(PredictionsEnsemble[0][0]) # 256
 
+
+                # HAX #np.save("!__SavedPredictionsEnsemble_By_Images___ToUseWithAcqFuncOptim.npy", PredictionsEnsemble_By_Images)
+                # HAX #print("saved!")
+
+                # REWRITING INTO 1 FUNC
                 # Multiprocessing ~~~ https://github.com/previtus/AttentionPipeline/blob/master/video_parser_v2/ThreadHerd.py
-                predictions_N = len(PredictionsEnsemble[0])
+
+                # multithr_calc_metrics_var < hardcoded variance only (is fast, arguably doesnt need multiproc)
+                # multithr_calc_metrics
+
+                """
+
+                startMulti = timer()
+
+                array_of_results = pool.map(multithr_calc_metrics_var, PredictionsEnsemble_By_Images)
+                # etc results trans
+
+                for metrics in array_of_results:
+                    sum_bald, sum_ent, sum_var = metrics
+                    BALD_over_samples.append(sum_bald)
+                    entropies_over_samples.append(sum_ent)
+                    variances_over_samples.append(sum_var)
+
+                endMulti = timer()
+                print("Multi processing Time", (endMulti - startMulti))
+                """
+
+                startSingle = timer()
+                control = []
+                predictions_N = len(PredictionsEnsemble_By_Images)
                 for prediction_i in range(predictions_N):
                     predictions = PredictionsEnsemble_By_Images[prediction_i] # 5 x 256x256
 
-                    # No need
-                    # a_problematic_zone = 0.0001 # move 0-1 to 0.1 to 0.9
-                    # helper_offset = np.ones_like(predictions)
-                    # predictions = predictions * (1.0 - 2*a_problematic_zone) + helper_offset * (a_problematic_zone)
-
-                    sum_bald = 0
-                    sum_ent = 0
-
-                    if acquisition_function is not "Variance": # "Variance", "Entropy", "BALD")
-                    
-                        #BALD calc 1.467359378002584s (0.0244559896333764min)
-
-                        def BALD_diff(pixel_predictions):
-                            # Bayesian Active Learning by Disagreement = BALD = https://arxiv.org/abs/1112.5745
-                            #T = len(pixel_predictions)
-                            #assert len(pixel_predictions.shape) == 1
-
-                            accum = 0
-                            for val in pixel_predictions:
-                                #if val == 0.0:
-                                #    val += np.finfo(float).eps
-                                #elif val == 1.0:
-                                #    val -= np.finfo(float).eps
-
-                                accum0 = - val * np.log(val)
-                                accum1 = - (1-val) * np.log(1-val)
-                                accum += accum0 + accum1
-
-                            return accum
-
-                        def ent_img_sumDiv(pixel_predictions):
-                            return np.sum(pixel_predictions, axis=0) / len(pixel_predictions)
-                        def ent_img_log(pk):
-                            return - pk * np.log(pk)
-
-                        startTMP = timer()
-
-                        #Entropy calc 0.44229524800903164s (0.007371587466817194min)
-
-                        ent_img_pk0 = np.apply_along_axis(arr=predictions, axis=0, func1d=ent_img_sumDiv)
-                        ent_img_pk1 = np.ones_like(ent_img_pk0) - ent_img_pk0
-                        ent_img_ent0 = np.apply_along_axis(arr=ent_img_pk0, axis=0, func1d=ent_img_log)
-                        ent_img_ent1 = np.apply_along_axis(arr=ent_img_pk1, axis=0, func1d=ent_img_log)
-                        entropy_image = ent_img_ent0 + ent_img_ent1
-                        sum_ent = np.sum(entropy_image.flatten())
-
-                        endTMP = timer()
-                        timeTMP = (endTMP - startTMP)
-                        print("Entropy calc " + str(timeTMP ) + "s (" + str(timeTMP  / 60.0) + "min)")
-
-                        startTMP = timer()
-
-                        bald_diff_image = np.apply_along_axis(arr=predictions, axis=0, func1d=BALD_diff)
-
-                        bald_image = -1 * ( entropy_image - bald_diff_image )
-                        sum_bald = np.sum(bald_image.flatten())
-
-                        endTMP = timer()
-                        timeTMP = (endTMP - startTMP)
-                        print("BALD calc " + str(timeTMP ) + "s (" + str(timeTMP / 60.0) + "min)")
-
-
-                    #startTMP = timer()
-
-                    #Variance calc 0.00033402000553905964s (5.56700009231766e-06min)
-                    variance_image = np.var(predictions, axis=0)
-                    sum_var = np.sum(variance_image.flatten())
-
-                    #endTMP = timer()
-                    #timeTMP = (endTMP - startTMP)
-                    #print("Variance calc " + str(timeTMP ) + "s (" + str(timeTMP / 60.0) + "min)")
-
-
-                    do_viz = False
-                    if do_viz:
-                        #if prediction_i < 32: # see first few !
-                        fig = plt.figure(figsize=(10, 8))
-                        for i in range(len(PredictionsEnsemble)):
-                            img = predictions[i]
-                            ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, i + 1)
-                            plt.imshow(img, cmap='gray', vmin=0.0, vmax=1.0)
-                            ax.title.set_text('Model ' + str(i))
-
-                        """
-                        ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, ModelEnsemble_N + 1)
-                        plt.imshow(entropy_image, cmap='gray', vmin=0.0, vmax=1.0)
-                        ax.title.set_text('Entropy (' + str(np.round(sum_ent, 3)) + ')')
-
-                        ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, ModelEnsemble_N + 2)
-                        plt.imshow(bald_image, cmap='gray', vmin=0.0, vmax=1.0)
-                        ax.title.set_text('BALD (' + str(np.round(sum_bald, 3)) + ')')
-                        """
-
-                        ax = fig.add_subplot(1, len(PredictionsEnsemble) + 3, ModelEnsemble_N + 3)
-                        plt.imshow(variance_image, cmap='gray', vmin=0.0, vmax=1.0)
-                        ax.title.set_text('Variance (' + str(np.round(sum_var, 3)) + ')')
-
-                        plt.show()
+                    sum_bald, sum_ent, sum_var = multithr_calc_metrics_var(predictions)
+                    control.append([sum_bald, sum_ent, sum_var])
 
                     BALD_over_samples.append(sum_bald)
                     entropies_over_samples.append(sum_ent)
                     variances_over_samples.append(sum_var)
 
-                overall_indices  = np.append(overall_indices, remaining_indices)
+                endSingle = timer()
+                print("Single processing Time", (endSingle - startSingle))
+
+
+                """
+                print("equal?", np.array_equal(control, array_of_results))
+                print("equal asarray conv?", np.array_equal(np.asarray(control), np.asarray(array_of_results)))
+
+                print("np.asarray(control).shape", np.asarray(control).shape)
+                print("np.asarray(array_of_results).shape", np.asarray(array_of_results).shape)
+
+                print("control[0]", control[0])
+                print("array_of_results[0]", array_of_results[0])
+
+                for i in range(len(control)):
+                    eq = np.array_equal(np.asarray(control[i]), np.asarray(array_of_results[i]))
+                    if not eq:
+                        print("At i=",i," not equal!", np.asarray(control[i]), np.asarray(array_of_results[i]))
+                        print("==", np.asarray(control[i]) == np.asarray(array_of_results[i]))
+                        print("np.array_equal=", np.array_equal(np.asarray(control[i]), np.asarray(array_of_results[i])))
+                """
+
+                del PredictionsEnsemble
+                del PredictionsEnsemble_By_Images
+
+                overall_indices = np.append(overall_indices, remaining_indices)
 
                 if DEBUG_skip_loading_most_of_data_batches:
                     if len(entropies_over_samples) > 120:
                         break # few batches only
 
-        #print("debug ,,,")
-        #print("entropies_over_samples",entropies_over_samples)
-        #print("variances_over_samples",variances_over_samples)
-        #print("overall_indices",overall_indices)
+                # approximate_megabatches_percent
+                loaded_batches = len(entropies_over_samples)
+                thr_enough = (approximate_megabatches_percent * 83144) / 100.0 # len(RemainingUnlabeledSet.original_indices)
+                # 10% should be cca 8000 -> we are taking only 32-100 samples per each iteration, this should be sufficient
+                if approximate_megabatches:
+                    if loaded_batches > thr_enough:
+                        print("Stopping the megabatches, we have enough loaded (",loaded_batches,") which is more than ", approximate_megabatches_percent, " percent, aka", thr_enough)
+                        break # few batches only
+
+
+        print("debug ,,,")
+        print("entropies_over_samples",entropies_over_samples)
+        print("variances_over_samples",variances_over_samples)
+        print("overall_indices",overall_indices)
 
         """
         #entropies_over_samples.sort() <- messes the rest
@@ -930,6 +974,9 @@ def main(args):
         packed_items = RemainingUnlabeledSet.pop_items(selected_indices)
         TrainSet.add_items(packed_items)
 
+        endAcquisition = timer()
+        time_acquisition = (endAcquisition - startAcquisition)
+
         # Clean up
 
         for handler in ModelEnsemble:
@@ -943,9 +990,6 @@ def main(args):
         #for i in range(3): gc.collect()
         keras.backend.clear_session()
 
-        end = timer()
-        time = (end - start)
-        print("This iteration took "+str(time)+"s ("+str(time/60.0)+"min)")
 
         # Cheeky save per each iteration (so we can reconstruct old / broken plots)
         pixel_statistics = pixels_thresholds, xs_number_of_data, pixels_recalls, pixels_precisions, pixels_accuracies, pixels_f1s, Ns_changed, Ns_nochanged, pixels_AUCs
@@ -1004,6 +1048,27 @@ def main(args):
         print("are we balanced in the val set?? Change:NoChange", N_change_val, N_nochange_val)
 
         print("=====<this was saved>=================================")
+
+
+        end = timer()
+        time_whole_it = (end - start)
+        print("This iteration took "+str(time_whole_it)+"s ("+str(time_whole_it/60.0)+"min)")
+
+        time_other = time_whole_it - time_training - time_testing - time_acquisition
+
+        print("Times:")
+        print("time_training", time_training)
+        print("time_testing", time_testing)
+        print("time_acquisition", time_acquisition)
+        print("time_other", time_other)
+        print("time_whole_it", time_whole_it)
+
+        timeS_training.append(time_training)
+        timeS_testing.append(time_testing)
+        timeS_acquisition.append(time_acquisition)
+        timeS_other.append(time_other)
+        timeS_whole_it.append(time_whole_it)
+
 
     #- AL outline, have two sets - TrainSet and UnlabeledSet and move data in between them... (always everything we have?)
     #2b.) Acquisition function to select subset of the RemainingUnlabeledSet -> move it to the TrainSet
@@ -1077,7 +1142,7 @@ def main(args):
     plt.savefig("["+args_name+"]_dbg_last_al_big_plot_tilesScores.png")
     plt.close()
 
-
+    # ---------------------------------------------------
     plt.figure(figsize=(7, 7)) # w, h
 
     N = len(Ns_changed)
@@ -1093,12 +1158,77 @@ def main(args):
     plt.savefig("["+args_name+"]_dbg_last_al_balance_plot.png")
     plt.close()
 
+    # -------------------------------------------------------
+    # timeS_training, timeS_testing, timeS_acquisition, timeS_other, timeS_whole_it
+
+    plt.figure(figsize=(7, 7)) # w, h
+    plt.plot(xs_number_of_data, timeS_training, color='black', label="Training")
+    plt.plot(xs_number_of_data, timeS_testing, color='red', marker='o', label="Testing")
+    plt.plot(xs_number_of_data, timeS_acquisition, color='blue', marker='o', label="Acqusitions")
+    plt.plot(xs_number_of_data, timeS_other, color='green', marker='o', label="Other")
+    plt.plot(xs_number_of_data, timeS_whole_it, color='orange', marker='o', label="Whole Iteration")
+
+    plt.ylabel('time it took in each operation')
+    plt.xticks(np.arange(len(xs_number_of_data)), xs_number_of_data)
+    plt.legend()
+
+    plt.savefig("["+args_name+"]_timeMeasurements.png")
+    plt.close()
+
     print("Ensemble tested on completely unbalanced!")
     print("Trying one with 1k to 40k balance and having it run properly - for few iterations at least -> later compare that between methods")
 
 
+import numpy as np
+def BALD_diff(pixel_predictions):
+    # Bayesian Active Learning by Disagreement = BALD = https://arxiv.org/abs/1112.5745
+    # T = len(pixel_predictions)
+    # assert len(pixel_predictions.shape) == 1
+
+    accum = 0
+    for val in pixel_predictions:
+        accum0 = - val * np.log(val)
+        accum1 = - (1 - val) * np.log(1 - val)
+        accum += accum0 + accum1
+
+    return accum
 
 
+def ent_img_sumDiv(pixel_predictions):
+    return np.sum(pixel_predictions, axis=0) / len(pixel_predictions)
+
+
+def ent_img_log(pk):
+    return - pk * np.log(pk)
+
+def multithr_calc_metrics_var(predictions_one_samples):
+    sum_bald = 0
+    sum_ent = 0
+    variance_image = np.var(predictions_one_samples, axis=0)
+    sum_var = np.sum(variance_image.flatten())
+    return sum_bald, sum_ent, sum_var
+
+def multithr_calc_metrics(predictions_one_samples, acquisition_function="Entropy"):
+    sum_bald = 0
+    sum_ent = 0
+
+    if acquisition_function == "Entropy" or acquisition_function == "BALD":
+        ent_img_pk0 = np.apply_along_axis(arr=predictions_one_samples, axis=0, func1d=ent_img_sumDiv)
+        ent_img_pk1 = np.ones_like(ent_img_pk0) - ent_img_pk0
+        ent_img_ent0 = np.apply_along_axis(arr=ent_img_pk0, axis=0, func1d=ent_img_log)
+        ent_img_ent1 = np.apply_along_axis(arr=ent_img_pk1, axis=0, func1d=ent_img_log)
+        entropy_image = ent_img_ent0 + ent_img_ent1
+        sum_ent = np.sum(entropy_image.flatten())
+
+    if acquisition_function == "BALD":
+        bald_diff_image = np.apply_along_axis(arr=predictions_one_samples, axis=0, func1d=BALD_diff)
+        bald_image = -1 * (entropy_image - bald_diff_image)
+        sum_bald = np.sum(bald_image.flatten())
+
+    variance_image = np.var(predictions_one_samples, axis=0)
+    sum_var = np.sum(variance_image.flatten())
+
+    return sum_bald, sum_ent, sum_var
 
 
 if __name__ == '__main__':
@@ -1106,6 +1236,9 @@ if __name__ == '__main__':
 
     start = timer()
 
+    # Can leave stuff just hanging on the GPU if ended incorrectly ...
+    #import multiprocessing
+    #with multiprocessing.Pool(multiprocessing.cpu_count() - 1) as pool:
     main(args)
 
     end = timer()

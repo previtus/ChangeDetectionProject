@@ -119,7 +119,7 @@ class Debugger(object):
         plt.show()
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
 
-    def viewTrippleFromUrl(self, left_path, right_path, label_path):
+    def viewTrippleFromUrl(self, left_path, right_path, label_path, optional_title = ""):
         fig = plt.figure(figsize=(10, 8))
         from skimage import io
         IMAGE_RESOLUTION = 112
@@ -177,6 +177,9 @@ class Debugger(object):
         text = ""
         text += "Label shape " + str(label.shape) + "\n" + self.dynamicRangeInImage(label)
         fig.gca().set(xlabel=text, xticks=[], yticks=[])
+
+        if len(optional_title) > 0:
+            plt.title(optional_title)
 
         plt.show()
         # also show dimensions, channels, dynamic range of each, occurances in the label (0, 1)
