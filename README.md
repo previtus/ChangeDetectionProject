@@ -8,7 +8,7 @@ Implementation of the Siamese U-Net model with the pre-trained ResNet34 architec
 
 ## Colab demo: <a href="https://colab.research.google.com/github/previtus/ChangeDetectionProject/blob/master/demo/_ChangeDetection_prediction_example.ipynb" title="Open In Colab"><img src="https://colab.research.google.com/assets/colab-badge.svg"></a>
 
-Check out the demo at: <a href="https://github.com/previtus/ChangeDetectionProject/blob/master/demo/_ChangeDetection_prediction_example.ipynb">ChangeDetection_prediction_example.ipynb</a>
+Check out the basic change detection demo at: <a href="https://github.com/previtus/ChangeDetectionProject/blob/master/demo/_ChangeDetection_prediction_example.ipynb">ChangeDetection_prediction_example.ipynb</a>
 
 ## Setup:
 
