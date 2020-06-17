@@ -2,6 +2,10 @@
 
 Implementation of the Siamese U-Net model with the pre-trained ResNet34 architecture as an encoder for the Change Detection task on Remote Sensing dataset with support for Deep Active Learning.
 
+<p align="center">
+<img src="https://raw.githubusercontent.com/previtus/ChangeDetectionProject/master/_illustration.jpg" width="560">
+</p>
+
 
 ## Setup:
 
