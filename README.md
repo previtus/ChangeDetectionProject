@@ -10,6 +10,8 @@ Implementation of the Siamese U-Net model with the pre-trained ResNet34 architec
 
 Check out the basic change detection demo at: <a href="https://github.com/previtus/ChangeDetectionProject/blob/master/demo/_ChangeDetection_prediction_example.ipynb">ChangeDetection_prediction_example.ipynb</a>
 
+_Note: This demo shows only the basic model inference and not the Active Learning approach (which requires more computational resources and a dataset at your disposal)._
+
 ## Setup:
 
 Start with installing the prerequisite python libraries. We worked with the following versions: 
