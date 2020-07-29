@@ -6,7 +6,7 @@ Implementation of the Siamese U-Net model with the pre-trained ResNet34 architec
 <img src="https://raw.githubusercontent.com/previtus/ChangeDetectionProject/master/_illustration.jpg" width="560">
 </p>
 
-## Colab demo: <a href="https://colab.research.google.com/github/previtus/ChangeDetectionProject/blob/master/demo/_ChangeDetection_prediction_example.ipynb" title="Open In Colab"><img src="https://colab.research.google.com/assets/colab-badge.svg"></a>
+## Colab demo with a pre-trained model: <a href="https://colab.research.google.com/github/previtus/ChangeDetectionProject/blob/master/demo/_ChangeDetection_prediction_example.ipynb" title="Open In Colab"><img src="https://colab.research.google.com/assets/colab-badge.svg"></a>
 
 Check out the basic change detection demo at: <a href="https://github.com/previtus/ChangeDetectionProject/blob/master/demo/_ChangeDetection_prediction_example.ipynb">ChangeDetection_prediction_example.ipynb</a>
 
@@ -32,7 +32,7 @@ segmentation-models    0.2.0
 tqdm                   4.29.1
 ```
 
-Download the dataset and place it into a folder specified in Settings.py. 
+Download the dataset and place it into a folder specified in Settings.py (_note: the original used dataset is from the Swiss company Swisstopo and as such is not publicly available_).
 
 To **train a model on the task of change detection** see the "main.py" and run it with the required arguments (such as encoder type, number of epochs or the batch size).
 
