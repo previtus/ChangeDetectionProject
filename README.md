@@ -64,3 +64,8 @@ python3 ActiveLearningLoop.py -name Run0_Random -AL_method Random -train_augment
 # Adding N - this one would add 32 samples for 40 iterations => 1280 samples in the final iteration
 python3 ActiveLearningLoop.py -name Run3_Ensemble_N5_Add32 -AL_method Ensemble -AL_Ensemble_numofmodels 5 -AL_iterations 40 -AL_iterationsample_size 32 -train_augmentation True
 ```
+
+
+### Siamese U-Net model
+
+Code for the model directly at: https://github.com/previtus/ChangeDetectionProject/blob/master/Model2_builder.py
