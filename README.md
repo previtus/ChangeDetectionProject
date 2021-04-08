@@ -1,4 +1,4 @@
-# Deep Active Learning in Remote Sensing for data efficient Change Detection
+# Deep Active Learning in Remote Sensing for data efficient Change Detection [arXiv:[2008.11201](https://arxiv.org/abs/2008.11201)] 
 
 Implementation of the Siamese U-Net model with the pre-trained ResNet34 architecture as an encoder for the Change Detection task on Remote Sensing dataset with support for Deep Active Learning.
 
